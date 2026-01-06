@@ -9,8 +9,7 @@ use App\Http\Controllers\PropertyController;
 use App\Http\Controllers\PropertyDocumentController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\ReportController;
-
-
+use App\Http\Controllers\SellPropertyController;
 
 
 // Auth routes
