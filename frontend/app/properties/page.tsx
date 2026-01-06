@@ -1,44 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import axiosInstance from "../api/axiosInstance";
+import ProjectApi from "../api/ProjectApis";
 
 interface Property {
   id: number;
   title: string;
   address: string;
-  price: number;
-  sellerId: number;
-  sellerName: string;
-  type: "residential" | "commercial";
-  status: "available" | "sold" | "pending";
-  description: string;
+  rate: string;
+  total_amount: string;
+  customer_id: number;
+  transaction_type: "PURCHASE" | "SELL";
+  category: string;
+  status: "AVAILABLE" | "SOLD" | "PENDING";
 }
 
 export default function PropertiesPage() {
-  const [properties] = useState<Property[]>([
-    {
-      id: 1,
-      title: "Modern Villa",
-      address: "123 Oak St",
-      price: 500000,
-      sellerId: 2,
-      sellerName: "Jane Smith",
-      type: "residential",
-      status: "available",
-      description: "Beautiful modern villa",
-    },
-  ]);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleDelete = (id: number) => {
-    if (confirm("Delete this property?")) {
-      console.log("Delete property:", id);
+  /* ================= FETCH PROPERTIES ================= */
+  useEffect(() => {
+    fetchProperties();
+  }, []);
+
+  const fetchProperties = async () => {
+    try {
+      setLoading(true);
+
+      const res = await axiosInstance.get(ProjectApi.all_properties);
+      const json = res.data;
+
+      setProperties(json.data || []);
+    } catch (error) {
+      console.error("Error loading properties:", error);
+      setProperties([]);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="p-6 text-black">
-      {/* Header */}
+      {/* ================= HEADER ================= */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">
@@ -65,80 +71,115 @@ export default function PropertiesPage() {
         </div>
       </div>
 
-      {/* Table */}
+      {/* ================= TABLE ================= */}
       <div className="bg-white p-5 rounded-xl shadow-sm">
         <div className="overflow-x-auto rounded-lg">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-gray-700 text-left">
-                {["Title", "Address", "Price", "Seller", "Status", "Actions"].map(
-                  (h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-3 font-semibold border-b border-gray-100"
-                    >
-                      {h}
-                    </th>
-                  )
-                )}
+                {[
+                  "S.no",
+                  "Title",
+                  "Address",
+                  "Price",
+                  "Transaction",
+                  "Status",
+                  "Actions",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="px-4 py-3 font-semibold border-b border-gray-100"
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
 
             <tbody>
-              {properties.map((p, idx) => (
-                <tr
-                  key={p.id}
-                  className={`transition ${
-                    idx % 2 === 0 ? "bg-white" : "bg-gray-50"
-                  } hover:bg-blue-50`}
-                >
-                  <td className="px-4 py-3 border-b border-gray-100 font-medium text-gray-900">
-                    {p.title}
-                  </td>
-                  <td className="px-4 py-3 border-b border-gray-100 text-gray-700">
-                    {p.address}
-                  </td>
-                  <td className="px-4 py-3 border-b border-gray-100 text-gray-700">
-                    ₹{p.price.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 border-b border-gray-100 text-gray-700">
-                    {p.sellerName}
-                  </td>
-                  <td className="px-4 py-3 border-b border-gray-100">
-                    <span
-                      className={`px-2 py-0.5 text-xs rounded-full font-medium ${
-                        p.status === "available"
-                          ? "bg-green-100 text-green-700"
-                          : p.status === "sold"
-                          ? "bg-red-100 text-red-700"
-                          : "bg-yellow-100 text-yellow-700"
-                      }`}
-                    >
-                      {p.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 border-b border-gray-100 flex gap-3">
-                    <Link
-                      href={`/properties/${p.id}`}
-                      className="text-blue-600 hover:text-blue-800"
-                    >
-                      View
-                    </Link>
-                    <Link
-                      href={`/properties/${p.id}/edit`}
-                      className="text-green-600 hover:text-green-800"
-                    >
-                      Edit
-                    </Link>
-                    <button
-                      onClick={() => handleDelete(p.id)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      Delete
-                    </button>
+              {/* LOADING */}
+              {loading && (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-4 py-6 text-center text-gray-500"
+                  >
+                    Loading properties...
                   </td>
                 </tr>
-              ))}
+              )}
+
+              {/* EMPTY */}
+              {!loading && properties.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-4 py-6 text-center text-gray-500"
+                  >
+                    No properties found
+                  </td>
+                </tr>
+              )}
+
+              {/* DATA */}
+              {!loading &&
+                properties.map((p, idx) => (
+                  <tr
+                    key={p.id}
+                    className={`transition ${
+                      idx % 2 === 0 ? "bg-white" : "bg-gray-50"
+                    } hover:bg-blue-50`}
+                  >
+                    <td className="px-4 py-3 border-b border-gray-100 font-medium text-gray-900">
+                      {idx+1}
+                    </td>
+                    <td className="px-4 py-3 border-b border-gray-100 font-medium text-gray-900">
+                      {p.title}
+                    </td>
+
+                    <td className="px-4 py-3 border-b border-gray-100 text-gray-700">
+                      {p.address}
+                    </td>
+
+                    <td className="px-4 py-3 border-b border-gray-100 text-gray-700">
+                      ₹{Number(p.rate).toLocaleString("en-IN")}
+                    </td>
+
+                    <td className="px-4 py-3 border-b border-gray-100 text-gray-700">
+                      {p.transaction_type}
+                    </td>
+
+                    <td className="px-4 py-3 border-b border-gray-100">
+                      <span
+                        className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+                          p.status === "AVAILABLE"
+                            ? "bg-green-100 text-green-700"
+                            : p.status === "SOLD"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-yellow-100 text-yellow-700"
+                        }`}
+                      >
+                        {p.status}
+                      </span>
+                    </td>
+
+                    <td className="px-4 py-3 border-b border-gray-100 flex gap-3">
+                      <Link
+                        href={`/properties/${p.id}`}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        View
+                      </Link>
+
+                      <Link
+                        href={`/properties/${p.id}/edit`}
+                        className="text-green-600 hover:text-green-800"
+                      >
+                        Edit
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>

@@ -18,6 +18,11 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // delete modal states
+  const [openDelete, setOpenDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+
   /* ================= FETCH CUSTOMERS ================= */
   useEffect(() => {
     fetchCustomers();
@@ -28,7 +33,7 @@ export default function CustomersPage() {
       setLoading(true);
 
       const res = await axiosInstance.get(ProjectApi.all_customers);
-      const json = res.data; // ✅ axios response
+      const json = res.data;
 
       if (!json?.status) {
         throw new Error("Failed to fetch customers");
@@ -43,10 +48,30 @@ export default function CustomersPage() {
     }
   };
 
-  const handleDelete = (id: number) => {
-    if (confirm("Delete this customer?")) {
-      console.log("Delete customer:", id);
-      // 🔥 delete API later
+  /* ================= DELETE CUSTOMER ================= */
+  const confirmDelete = async () => {
+    if (!selectedId) return;
+
+    try {
+      setDeleting(true);
+
+      const formData = new FormData();
+      formData.append("_method", "DELETE");
+
+      await axiosInstance.post(
+        `${ProjectApi.all_customers}/${selectedId}`,
+        formData
+      );
+
+      // refresh list
+      fetchCustomers();
+    } catch (error) {
+      console.error("Delete failed", error);
+      alert("Failed to delete customer");
+    } finally {
+      setDeleting(false);
+      setOpenDelete(false);
+      setSelectedId(null);
     }
   };
 
@@ -123,6 +148,9 @@ export default function CustomersPage() {
                     } hover:bg-blue-50`}
                   >
                     <td className="px-4 py-3 border-b border-gray-100 font-medium text-gray-900">
+                      {idx +1}
+                    </td>
+                    <td className="px-4 py-3 border-b border-gray-100 font-medium text-gray-900">
                       {c.name}
                     </td>
 
@@ -164,7 +192,10 @@ export default function CustomersPage() {
                       </Link>
 
                       <button
-                        onClick={() => handleDelete(c.id)}
+                        onClick={() => {
+                          setSelectedId(c.id);
+                          setOpenDelete(true);
+                        }}
                         className="text-red-600 hover:text-red-800"
                       >
                         Delete
@@ -176,6 +207,43 @@ export default function CustomersPage() {
           </table>
         </div>
       </div>
+
+      {/* ================= DELETE MODAL (INLINE) ================= */}
+      {openDelete && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-sm p-6">
+            <h2 className="text-lg font-semibold text-gray-800">
+              Delete Customer
+            </h2>
+
+            <p className="text-sm text-gray-600 mt-2">
+              Are you sure you want to delete this customer?
+              <br />
+              <span className="text-red-600 font-medium">
+                This action cannot be undone.
+              </span>
+            </p>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setOpenDelete(false)}
+                disabled={deleting}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="px-4 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700"
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
