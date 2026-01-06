@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up()
     {
-        Schema::create('documents', function (Blueprint $table) {
+        Schema::create('property_documents', function (Blueprint $table) {
             $table->id();
 
             // Link to Property

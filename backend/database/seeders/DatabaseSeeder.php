@@ -7,166 +7,182 @@ use App\Models\User;
 use App\Models\Role;
 use App\Models\Customer;
 use App\Models\Property;
+use App\Models\Transaction;
+use App\Models\PropertyDocument;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Faker\Factory as Faker;
 
 class DatabaseSeeder extends Seeder
 {
     public function run()
     {
-        // Transaction use kar rahe hain taaki data consistency rahe
+        $faker = Faker::create();
+
         DB::beginTransaction();
 
         try {
             // ==========================================
-            // 1. CREATE ROLE (Super Admin)
+            // 1. SETUP ADMIN & ROLE
             // ==========================================
-            // ID 1 ko hum Super Admin maan rahe hain
-            $role = Role::firstOrCreate(
-                ['id' => 1], // Check id 1
-                [
-                    'role_name' => 'Super Admin',
-                    'status' => 1,
-                    'is_deleted' => 0,
-                    'user_id' => 0 // System generated
-                ]
-            );
+            $role = Role::firstOrCreate(['id' => 1], [
+                'role_name' => 'Super Admin',
+                'status' => 1, 'is_deleted' => 0, 'user_id' => 0
+            ]);
+
+            $user = User::firstOrCreate(['email' => 'admin@gmail.com'], [
+                'name' => 'System Admin',
+                'password' => Hash::make('admin@1234'),
+                'role_id' => $role->id,
+                'status' => 1, 'is_deleted' => 0
+            ]);
+
+            $this->command->info('Admin Created: admin@gmail.com / admin@1234');
 
             // ==========================================
-            // 2. CREATE USER (Admin)
+            // 2. CREATE 10 CUSTOMERS
             // ==========================================
-            $user = User::firstOrCreate(
-                ['email' => 'admin@gmail.com'], // Check email
-                [
-                    'name' => 'System Admin',
-                    'password' => Hash::make('admin@1234'), // Password: admin@1234
-                    'role_id' => $role->id,
-                    'status' => 1,
+            $customers = [];
+            $types = ['SELLER', 'BUYER', 'BOTH'];
+
+            for ($i = 0; $i < 10; $i++) {
+                $customers[] = Customer::create([
+                    'name' => $faker->name,
+                    'phone' => $faker->numerify('9#########'),
+                    'email' => $faker->unique()->safeEmail,
+                    'address' => $faker->address,
+                    'type' => $types[array_rand($types)],
+                    'created_by' => $user->id,
                     'is_deleted' => 0
-                ]
-            );
+                ]);
+            }
+            $this->command->info('10 Customers Created.');
 
             // ==========================================
-            // 3. CREATE CUSTOMERS (Seller, Buyer, Both)
+            // 3. CREATE PROPERTIES & TRANSACTIONS
             // ==========================================
             
-            // Customer 1: SELLER (Jisse hum Zameen khareedenge)
-            $seller = Customer::create([
-                'name' => 'Ramesh Kumar (Land Owner)',
-                'phone' => '9876543210',
-                'email' => 'ramesh@example.com',
-                'address' => 'Village Palasia, Indore',
-                'type' => 'SELLER',
-                'created_by' => $user->id,
-                'is_deleted' => 0
-            ]);
+            // Logic: Mix of Purchase (Kharcha) and Sell (Kamai)
+            // Categories: LAND, FLAT, HOUSE, COMMERCIAL
+            
+            $categories = ['LAND', 'FLAT', 'HOUSE', 'COMMERCIAL', 'AGRICULTURE'];
+            $transactionTypes = ['PURCHASE', 'SELL'];
 
-            // Customer 2: BUYER (Jisko hum Flat bechenge)
-            $buyer = Customer::create([
-                'name' => 'Amit Sharma (Flat Buyer)',
-                'phone' => '9123456789',
-                'email' => 'amit@example.com',
-                'address' => 'Scheme 54, Vijay Nagar',
-                'type' => 'BUYER',
-                'created_by' => $user->id,
-                'is_deleted' => 0
-            ]);
+            for ($i = 0; $i < 15; $i++) {
+                
+                // Random Selection
+                $cat = $categories[array_rand($categories)];
+                $txnType = $transactionTypes[array_rand($transactionTypes)];
+                $randomCustomer = $customers[array_rand($customers)];
 
-            // Customer 3: BOTH (Vyapari - Kabhi leta hai kabhi deta hai)
-            $broker = Customer::create([
-                'name' => 'Vijay Traders (Broker)',
-                'phone' => '8888899999',
-                'email' => 'vijay@traders.com',
-                'address' => 'M.G. Road, Main Market',
-                'type' => 'BOTH',
-                'created_by' => $user->id,
-                'is_deleted' => 0
-            ]);
+                // Calculation Logic
+                $qty = 1;
+                // Rate between 5 Lakh to 50 Lakh
+                $rate = $faker->numberBetween(5, 50) * 100000; 
+                $baseAmount = $qty * $rate;
 
-            // ==========================================
-            // 4. CREATE PROPERTIES (Transactions)
-            // ==========================================
+                // GST (0%, 5%, 12%, 18%)
+                $gstPercent = $faker->randomElement([0, 5, 12]);
+                $gstAmount = ($baseAmount * $gstPercent) / 100;
 
-            // Property 1: PURCHASE (Land purchase from Ramesh)
-            // Math: 1 Plot * 10,00,000 = 10L. Expense: 50k. Total: 10.5L. Paid: 5L. Due: 5.5L
-            Property::create([
-                'date' => now(),
-                'transaction_type' => 'PURCHASE',
-                'customer_id' => $seller->id, // Linked to Seller
-                'invoice_no' => 'INV-PUR-001',
-                'title' => 'Agricultural Land Purchase',
-                'category' => 'LAND',
-                'address' => 'Survey No 52, Palasia',
-                'quantity' => 1,
-                'rate' => 1000000,
-                'base_amount' => 1000000,
-                'gst_percentage' => 0, // Land pe GST nahi hota usually
-                'gst_amount' => 0,
-                'other_expenses' => 50000, // Registry charges etc
-                'total_amount' => 1050000,
-                'paid_amount' => 500000,
-                'due_amount' => 550000,
-                'area_dismil' => 5.5,
-                'khata_number' => 'K-123',
-                'status' => 'AVAILABLE', // Abhi hamare paas hai
-                'is_deleted' => 0
-            ]);
+                // Expenses (10k to 50k)
+                $otherExpenses = $faker->numberBetween(10, 50) * 1000;
 
-            // Property 2: SELL (Flat sale to Amit)
-            // Math: 1 Flat * 25L. GST 5% (1.25L). Total: 26.25L. Paid: Full.
-            Property::create([
-                'date' => now(),
-                'transaction_type' => 'SELL',
-                'customer_id' => $buyer->id, // Linked to Buyer
-                'invoice_no' => 'INV-SELL-101',
-                'title' => '3BHK Flat Sale',
-                'category' => 'FLAT',
-                'address' => 'Sky Heights, 4th Floor',
-                'quantity' => 1,
-                'rate' => 2500000,
-                'base_amount' => 2500000,
-                'gst_percentage' => 5,
-                'gst_amount' => 125000, // 25L ka 5%
-                'other_expenses' => 0,
-                'total_amount' => 2625000,
-                'paid_amount' => 2625000,
-                'due_amount' => 0,
-                'house_number' => '402',
-                'floor_number' => 4,
-                'bhk' => 3,
-                'status' => 'SOLD',
-                'is_deleted' => 0
-            ]);
+                $totalAmount = $baseAmount + $gstAmount + $otherExpenses;
 
-            // Property 3: PURCHASE (Office from Vijay Traders)
-            // Math: 1 Shop * 5L. No GST. Paid 0 (Udhaar).
-            Property::create([
-                'date' => now()->subDays(2),
-                'transaction_type' => 'PURCHASE',
-                'customer_id' => $broker->id,
-                'invoice_no' => 'INV-PUR-002',
-                'title' => 'Commercial Shop Purchase',
-                'category' => 'COMMERCIAL',
-                'address' => 'Shop 10, City Center',
-                'quantity' => 1,
-                'rate' => 500000,
-                'base_amount' => 500000,
-                'gst_percentage' => 0,
-                'gst_amount' => 0,
-                'other_expenses' => 10000,
-                'total_amount' => 510000,
-                'paid_amount' => 0, // Kuch nahi diya
-                'due_amount' => 510000,
-                'status' => 'AVAILABLE',
-                'is_deleted' => 0
-            ]);
+                // Create Property (Initially 0 Paid, we will add via Transaction)
+                $property = Property::create([
+                    'date' => $faker->dateTimeBetween('-6 months', 'now'), // Pichle 6 mahine ka data
+                    'transaction_type' => $txnType,
+                    'customer_id' => $randomCustomer->id,
+                    'invoice_no' => 'INV-' . strtoupper(substr($txnType, 0, 3)) . '-' . ($i + 100),
+                    'title' => "$cat Deal in " . $faker->city,
+                    'category' => $cat,
+                    'address' => $faker->address,
+                    'quantity' => $qty,
+                    'rate' => $rate,
+                    'base_amount' => $baseAmount,
+                    'gst_percentage' => $gstPercent,
+                    'gst_amount' => $gstAmount,
+                    'other_expenses' => $otherExpenses,
+                    'total_amount' => $totalAmount,
+                    'paid_amount' => 0, // Will update below
+                    'due_amount' => $totalAmount, // Will update below
+                    'status' => 'AVAILABLE',
+                    'is_deleted' => 0
+                ]);
+
+                // --- 4. CREATE TRANSACTIONS (EMIs) ---
+                
+                // Scenario: Kisi ne pura paisa diya, kisi ne aadha, kisi ne kuch nahi
+                $paymentScenario = $faker->randomElement(['FULL', 'PARTIAL', 'BOOKING_ONLY']);
+                $transactionsTotal = 0;
+
+                // First Payment (Booking) - Always happens usually
+                $bookingAmount = 0;
+                if ($paymentScenario == 'FULL') {
+                    $bookingAmount = $totalAmount; // Ek baar me pura paisa
+                    $property->update(['status' => ($txnType == 'SELL' ? 'SOLD' : 'AVAILABLE')]);
+                } elseif ($paymentScenario == 'PARTIAL') {
+                    $bookingAmount = $totalAmount * 0.40; // 40% Booking
+                } else {
+                    $bookingAmount = 50000; // Sirf token money
+                }
+
+                // Add 1st Transaction
+                if ($bookingAmount > 0) {
+                    Transaction::create([
+                        'property_id' => $property->id,
+                        'amount' => $bookingAmount,
+                        'payment_date' => $property->date, // Same as deal date
+                        'payment_mode' => $faker->randomElement(['CASH', 'ONLINE', 'CHEQUE']),
+                        'reference_no' => $faker->swiftBicNumber,
+                        'remarks' => 'Booking / Down Payment',
+                        'is_deleted' => 0
+                    ]);
+                    $transactionsTotal += $bookingAmount;
+                }
+
+                // Add 2nd Transaction (Agar partial hai to 1 mahine baad ek aur payment)
+                if ($paymentScenario == 'PARTIAL') {
+                    $secondInstallment = $totalAmount * 0.20; // 20% aur diya
+                    
+                    Transaction::create([
+                        'property_id' => $property->id,
+                        'amount' => $secondInstallment,
+                        'payment_date' => $faker->dateTimeBetween($property->date, 'now'),
+                        'payment_mode' => 'ONLINE',
+                        'remarks' => '2nd Installment',
+                        'is_deleted' => 0
+                    ]);
+                    $transactionsTotal += $secondInstallment;
+                }
+
+                // Update Property Paid/Due
+                $property->update([
+                    'paid_amount' => $transactionsTotal,
+                    'due_amount' => $totalAmount - $transactionsTotal
+                ]);
+
+                // --- 5. CREATE DOCUMENTS ---
+                $docNames = ['Registry Paper', 'Aadhar Card', 'Pan Card', 'Agreement Copy'];
+                $randomDoc = $docNames[array_rand($docNames)];
+
+                PropertyDocument::create([
+                    'property_id' => $property->id,
+                    'doc_name' => $randomDoc,
+                    'doc_file' => 'documents/dummy.pdf', // Dummy path
+                    'is_deleted' => 0
+                ]);
+            }
+
+            $this->command->info('15 Properties, Related Transactions & Documents Created!');
 
             DB::commit();
-            $this->command->info('Database seeded successfully! User: admin@gmail.com / admin@1234');
 
         } catch (\Exception $e) {
             DB::rollBack();
-            $this->command->error('Seeding failed: ' . $e->getMessage());
+            $this->command->error('Seeding Error: ' . $e->getMessage());
         }
     }
 }
