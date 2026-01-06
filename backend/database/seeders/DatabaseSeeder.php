@@ -18,7 +18,7 @@ class DatabaseSeeder extends Seeder
     public function run()
     {
         // 1. Indian Data Faker
-        $faker = Faker::create('en_IN'); // 'en_IN' generates Indian Names & Addresses
+        $faker = Faker::create('en_IN'); 
 
         DB::beginTransaction();
 

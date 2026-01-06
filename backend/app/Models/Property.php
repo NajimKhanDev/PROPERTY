@@ -68,7 +68,7 @@ class Property extends Model
     // 3. Documents 
     public function documents()
     {
-        return $this->hasMany(Document::class, 'property_id');
+        return $this->hasMany(PropertyDocument::class, 'property_id');
     }
     
     // 4. Transactions
