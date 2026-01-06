@@ -12,6 +12,7 @@ class Role extends Model
     protected $fillable = [
         'role_name',
         'status',
+        'permissions',
         'user_id',
         'is_deleted',
     ];
@@ -19,6 +20,7 @@ class Role extends Model
     protected $casts = [
         'status' => 'boolean',
         'is_deleted' => 'boolean',
+        'permissions' => 'array',
     ];
 
     public function scopeActive($query)
