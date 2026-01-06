@@ -11,25 +11,25 @@ return new class extends Migration
         Schema::create('properties', function (Blueprint $table) {
             $table->id();
 
-            // 1. Transaction Info
+            // 1. Transaction Info (Label for Purchase vs Sell)
             $table->date('date')->useCurrent(); 
+            // YAHAN hai wo label jo aapne manga tha
             $table->enum('transaction_type', ['PURCHASE', 'SELL'])->default('PURCHASE'); 
-            $table->string('invoice_no')->nullable(); // Bill Number
+            $table->string('invoice_no')->nullable();
 
-            // 2. Party Details
-            $table->string('party_name'); 
-            $table->string('party_phone')->nullable();
+            
+            $table->foreignId('customer_id')
+                  ->constrained('customers')
+                  ->onDelete('cascade'); 
 
             // 3. Property / Item Details
             $table->string('title'); 
-            // HSN CODE REMOVED HERE
             $table->enum('category', ['LAND', 'FLAT', 'HOUSE', 'COMMERCIAL', 'AGRICULTURE']);
             $table->text('address')->nullable();
 
             // 4. Rate & Amount Logic
             $table->integer('quantity')->default(1); 
             $table->decimal('rate', 15, 2); 
-            
             $table->decimal('base_amount', 15, 2); 
 
             // Tax Details
@@ -58,7 +58,7 @@ return new class extends Migration
 
             // Status
             $table->enum('status', ['AVAILABLE', 'SOLD'])->default('AVAILABLE');
-$table->boolean('is_deleted')->default(0);
+            $table->boolean('is_deleted')->default(0);
             $table->timestamps();
         });
     }

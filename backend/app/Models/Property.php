@@ -9,25 +9,26 @@ class Property extends Model
 {
     use HasFactory;
 
-    // Saare fields jo mass assignable hain (Migration ke hisab se)
+    // Mass assignable fields
     protected $fillable = [
+        'customer_id',      // NEW: Linked to Customers table
         'date',
-        'transaction_type', // PURCHASE or SELL
+        'transaction_type', // PURCHASE (Seller) or SELL (Buyer)
         'invoice_no',
-        'party_name',
-        'party_phone',
+        // 'party_name',    <-- REMOVED
+        // 'party_phone',   <-- REMOVED
         'title',
         'category',
         'address',
         'quantity',
         'rate',
-        'base_amount',      // Auto-calculated
+        'base_amount',      
         'gst_percentage',
-        'gst_amount',       // Auto-calculated
+        'gst_amount',       
         'other_expenses',
-        'total_amount',     // Auto-calculated
+        'total_amount',     
         'paid_amount',
-        'due_amount',       // Auto-calculated
+        'due_amount',       
         'area_dismil',
         'plot_number',
         'khata_number',
@@ -39,7 +40,7 @@ class Property extends Model
         'is_deleted',
     ];
 
-    // Data types ko sahi format me rakhne ke liye
+    // Data types formatting
     protected $casts = [
         'is_deleted' => 'boolean',
         'date' => 'date',
@@ -52,29 +53,32 @@ class Property extends Model
         'due_amount' => 'decimal:2',
     ];
 
-    // --- HELPER SCOPES (Filtering ke liye) ---
+    // --- RELATIONSHIPS ---
 
-    // Jab sirf Purchase dekhna ho: Property::purchases()->get();
+    // 1. Property belongs to a Customer (Buyer or Seller)
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class, 'customer_id');
+    }
+
+    // 2. Property has many Documents
+    public function documents()
+    {
+        return $this->hasMany(Document::class, 'property_id');
+    }
+
+    // --- HELPER SCOPES ---
+
     public function scopePurchases($query)
     {
         return $query->where('transaction_type', 'PURCHASE');
     }
 
-    // Jab sirf Sell dekhna ho: Property::sales()->get();
     public function scopeSales($query)
     {
         return $query->where('transaction_type', 'SELL');
     }
-    // In App\Models\Property.php
 
-public function documents()
-{
-    
-    // jisme 'property_id' column hai.
-    return $this->hasMany(Document::class, 'property_id');
-}
-
-    // Jab sirf available properties dekhni ho
     public function scopeAvailable($query)
     {
         return $query->where('status', 'AVAILABLE');
