@@ -11,6 +11,7 @@ use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SellPropertyController;
 
+
 // Auth routes
 
 Route::post('/login', [UserController::class, 'login']);
