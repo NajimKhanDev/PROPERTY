@@ -9,9 +9,7 @@ use App\Http\Controllers\PropertyController;
 use App\Http\Controllers\PropertyDocumentController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\ReportController;
-
-
-
+use App\Http\Controllers\SellPropertyController;
 
 // Auth routes
 
@@ -85,4 +83,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/reports/dues', [ReportController::class, 'getDuesReport']);
     Route::get('/reports/sales-performance', [ReportController::class, 'getSoldPropertiesPnL']);
     Route::get('/reports/charts/monthly', [ReportController::class, 'getMonthlyTrend']);
+
+    //Sell Property
+    Route::apiResource('sell-properties', SellPropertyController::class);
 });
