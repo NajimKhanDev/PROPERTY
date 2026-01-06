@@ -81,8 +81,8 @@ class DatabaseSeeder extends Seeder
                 // 1. DEBIT TRANSACTION (Purchase Expense)
                 Transaction::create([
                     'property_id' => $property->id,
-                    'sell_property_id' => null, // Expense has no sale ID
-                    'type' => 'DEBIT',          // Money Out
+                    'sell_property_id' => null, 
+                    'type' => 'DEBIT',          
                     'amount' => $totalCost,
                     'payment_date' => $property->date,
                     'payment_mode' => 'CHEQUE',
@@ -117,25 +117,34 @@ class DatabaseSeeder extends Seeder
                         'is_deleted' => 0
                     ]);
 
-                    // Generate Multiple Income Transactions (Installments)
-                    $collected = 0;
-                    $numInstallments = $faker->numberBetween(2, 4); // 2 to 4 payments per sale
+                    // --- NEW LOGIC: DUES CREATION ---
+                    // Only 30% people pay full, 70% will have Dues
+                    $isFullyPaid = $faker->boolean(30); 
+                    
+                    // Define total installments planned (e.g. 4)
+                    $totalInstallmentsPlan = 4;
+                    $installmentAmount = floor($finalSalePrice / $totalInstallmentsPlan);
 
-                    for ($k = 1; $k <= $numInstallments; $k++) {
-                        // Calculate installment amount
-                        $installment = floor($finalSalePrice / $numInstallments);
+                    // How many did they actually pay?
+                    // If fully paid -> 4. If not -> random 1 to 3.
+                    $paymentsMade = $isFullyPaid ? $totalInstallmentsPlan : $faker->numberBetween(1, 3);
+
+                    $collected = 0;
+
+                    for ($k = 1; $k <= $paymentsMade; $k++) {
                         
-                        // Adjust last installment
-                        if ($k == $numInstallments) {
-                            $installment = $finalSalePrice - $collected;
+                        // If it's the last planned installment AND fully paid, adjust amount to match total
+                        $currentPay = $installmentAmount;
+                        if ($isFullyPaid && $k == $totalInstallmentsPlan) {
+                            $currentPay = $finalSalePrice - $collected;
                         }
 
                         // 2. CREDIT TRANSACTION (Sales Income)
                         Transaction::create([
                             'property_id' => $property->id,
-                            'sell_property_id' => $saleDeal->id, // LINKED TO DEAL
-                            'type' => 'CREDIT',                  // Money In
-                            'amount' => $installment,
+                            'sell_property_id' => $saleDeal->id, 
+                            'type' => 'CREDIT',                  
+                            'amount' => $currentPay,
                             'payment_date' => $faker->dateTimeBetween($saleDeal->sale_date, 'now'),
                             'payment_mode' => $faker->randomElement(['UPI', 'CHEQUE', 'CASH']),
                             'reference_no' => "REC-$i-$k",
@@ -143,24 +152,28 @@ class DatabaseSeeder extends Seeder
                             'is_deleted' => 0
                         ]);
 
-                        $collected += $installment;
+                        $collected += $currentPay;
                     }
+
+                    // Calculate Final Status
+                    $pending = $finalSalePrice - $collected;
+                    $status = ($pending <= 10) ? 'SOLD' : 'BOOKED'; // 10 rs buffer for rounding
 
                     // Update Deal Status
                     $saleDeal->update([
                         'received_amount' => $collected,
-                        'pending_amount' => 0
+                        'pending_amount' => $pending
                     ]);
 
                     // Update Inventory Link
                     $property->update([
-                        'status' => 'SOLD',
+                        'status' => $status,
                         'buyer_id' => $buyer->id
                     ]);
                 }
             }
 
-            $this->command->info('Seeding Done: 25 Properties & 60+ Transactions Created.');
+            $this->command->info('Seeding Done: Data created with Pending Dues.');
             DB::commit();
 
         } catch (\Exception $e) {
