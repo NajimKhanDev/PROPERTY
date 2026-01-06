@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Property;
 use App\Models\Transaction;
-use App\Models\Document;
+use App\Models\PropertyDocument;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -51,18 +51,23 @@ class PropertyController extends Controller
      * POST: Create a new Property Deal.
      * Automatically assigns Seller/Buyer ID and creates the first transaction.
      */
-    public function store(Request $request)
+  public function store(Request $request)
     {
-        // Step 1: Validate Inputs
+        // 1. Validate Inputs
         $validated = $request->validate([
             'transaction_type' => 'required|in:PURCHASE,SELL',
-            'customer_id'      => 'required|exists:customers,id', // Generic Customer ID
+            
+            // Conditional Validation: Purchase hai to Seller chahiye, Sell hai to Buyer
+            'seller_id'        => 'required_if:transaction_type,PURCHASE|nullable|exists:customers,id',
+            'buyer_id'         => 'required_if:transaction_type,SELL|nullable|exists:customers,id',
+
             'title'            => 'required|string|max:255',
             'category'         => 'required|in:LAND,FLAT,HOUSE,COMMERCIAL,AGRICULTURE',
             'quantity'         => 'required|integer|min:1',
             'rate'             => 'required|numeric|min:0',
             
-            // Optional Payment & Docs
+            // Optional Fields
+            'invoice_no'       => 'nullable|string|max:50',
             'paid_amount'      => 'nullable|numeric|min:0',
             'payment_mode'     => 'nullable|string',
             'payment_date'     => 'nullable|date',
@@ -70,22 +75,10 @@ class PropertyController extends Controller
             'documents.*'      => 'file|mimes:jpg,jpeg,png,pdf,doc,docx|max:10240'
         ]);
 
-        DB::beginTransaction(); // Start Database Transaction
+        DB::beginTransaction(); // Start Transaction
 
         try {
-            // Step 2: Determine if the Customer is a Seller or Buyer
-            $sellerId = null;
-            $buyerId  = null;
-
-            // Logic: If we are Purchasing, the customer is a 'Seller'.
-            // If we are Selling, the customer is a 'Buyer'.
-            if ($request->transaction_type === 'PURCHASE') {
-                $sellerId = $request->customer_id;
-            } else {
-                $buyerId = $request->customer_id;
-            }
-
-            // Step 3: Calculate Financials
+            // 2. Calculate Financials
             $quantity      = $request->input('quantity', 1);
             $rate          = $request->input('rate', 0);
             $baseAmount    = $quantity * $rate;
@@ -101,10 +94,12 @@ class PropertyController extends Controller
 
             $date = $request->filled('date') ? $request->date : now();
 
-            // Step 4: Create Property Record
+            // 3. Create Property
             $property = Property::create([
-                'seller_id'        => $sellerId, // Assigned based on logic above
-                'buyer_id'         => $buyerId,  // Assigned based on logic above
+                // Direct Assignment (Jo request me aaya wahi jayega)
+                'seller_id'        => $request->seller_id, 
+                'buyer_id'         => $request->buyer_id,
+                
                 'transaction_type' => $request->transaction_type,
                 'title'            => $request->title,
                 'category'         => $request->category,
@@ -122,26 +117,26 @@ class PropertyController extends Controller
                 'is_deleted'       => 0
             ]);
 
-            // Step 5: Create Initial Transaction (If any payment made)
+            // 4. Initial Payment
             if ($paidAmount > 0) {
                 Transaction::create([
                     'property_id'  => $property->id,
                     'amount'       => $paidAmount,
                     'payment_date' => $request->input('payment_date', $date),
                     'payment_mode' => $request->input('payment_mode', 'CASH'),
-                    'reference_no' => $request->input('invoice_no'),
-                    'remarks'      => 'Initial Booking / Down Payment',
+                    'reference_no' => $request->invoice_no,
+                    'remarks'      => 'Initial Booking/Payment',
                     'is_deleted'   => 0
                 ]);
             }
 
-            // Step 6: Handle Document Uploads
+            // 5. Upload Documents
             if ($request->hasFile('documents')) {
                 foreach ($request->file('documents') as $file) {
-                    $filename = time() . '_' . uniqid() . '_' . preg_replace('/\s+/', '_', $file->getClientOriginalName());
+                    $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
                     $filePath = $file->storeAs('documents', $filename, 'public');
 
-                    Document::create([
+                    PropertyDocument::create([
                         'property_id' => $property->id,
                         'doc_name'    => $file->getClientOriginalName(),
                         'doc_file'    => $filePath,
@@ -150,16 +145,15 @@ class PropertyController extends Controller
                 }
             }
 
-            DB::commit(); // Save everything
+            DB::commit(); // Save All
 
             return response()->json([
-                'message' => 'Property created successfully.', 
-                // Return data with relations for immediate UI update
-                'data' => $property->load(['seller', 'buyer', 'documents']) 
+                'message' => 'Property created successfully.',
+                'data'    => $property->load(['seller', 'buyer', 'documents'])
             ], 201);
 
         } catch (\Exception $e) {
-            DB::rollBack(); // Revert changes on error
+            DB::rollBack(); // Revert Changes
             return response()->json(['message' => 'Error: ' . $e->getMessage()], 500);
         }
     }
@@ -234,7 +228,7 @@ class PropertyController extends Controller
                     $filename = time() . '_' . uniqid() . '_' . preg_replace('/\s+/', '_', $file->getClientOriginalName());
                     $filePath = $file->storeAs('documents', $filename, 'public');
 
-                    Document::create([
+                    PropertyDocument::create([
                         'property_id' => $property->id,
                         'doc_name'    => $file->getClientOriginalName(),
                         'doc_file'    => $filePath,
