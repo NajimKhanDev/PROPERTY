@@ -3,25 +3,32 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
-class Property extends Model
+class SellProperty extends Model
 {
+    use HasFactory;
+
+    // Guard id
     protected $guarded = ['id']; 
 
     // Relationships
-    
-    // 1. Seller 
-    public function seller() {
-        return $this->belongsTo(Customer::class, 'seller_id');
+
+    // 1. Linked Property (Inventory)
+    public function property() {
+        return $this->belongsTo(Property::class, 'property_id');
     }
 
-    // 2. Sale Info 
-    public function sale() {
-        return $this->hasOne(SellProperty::class, 'property_id');
+    // 2. Buyer (Customer)
+    public function buyer() {
+        // Table has customer_id
+        return $this->belongsTo(Customer::class, 'customer_id');
     }
-
-    // 3. Transactions 
     public function transactions() {
-        return $this->morphMany(Transaction::class, 'model');
+        // Logic: Transactions table mein 'property_id' match karo 
+        // Lekin sirf wo jo 'CREDIT' hain (Income)
+        return $this->hasMany(Transaction::class, 'property_id', 'property_id')
+                    ->where('type', 'CREDIT')
+                    ->orderBy('payment_date', 'desc');
     }
 }

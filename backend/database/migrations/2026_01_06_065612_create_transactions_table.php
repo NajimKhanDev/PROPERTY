@@ -17,7 +17,7 @@ return new class extends Migration
             // Payment Info
             $table->decimal('amount', 15, 2); // Amount Paid
             $table->date('payment_date');
-            
+            $table->enum('type', ['CREDIT', 'DEBIT']);
             // Details
             $table->string('payment_mode')->default('CASH'); // CASH, ONLINE, CHEQUE
             $table->string('reference_no')->nullable();      // UTR No, Cheque No
