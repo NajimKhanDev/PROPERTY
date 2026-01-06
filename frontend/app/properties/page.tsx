@@ -21,19 +21,27 @@ export default function PropertiesPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // pagination
+  const [page, setPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+
   /* ================= FETCH PROPERTIES ================= */
   useEffect(() => {
-    fetchProperties();
-  }, []);
+    fetchProperties(page);
+  }, [page]);
 
-  const fetchProperties = async () => {
+  const fetchProperties = async (pageNumber: number) => {
     try {
       setLoading(true);
 
-      const res = await axiosInstance.get(ProjectApi.all_properties);
+      const res = await axiosInstance.get(
+        `${ProjectApi.all_properties}?page=${pageNumber}`
+      );
+
       const json = res.data;
 
       setProperties(json.data || []);
+      setLastPage(json.last_page || 1);
     } catch (error) {
       console.error("Error loading properties:", error);
       setProperties([]);
@@ -51,7 +59,7 @@ export default function PropertiesPage() {
             Property Management
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            {properties.length} properties available
+            {properties.length} properties on this page
           </p>
         </div>
 
@@ -101,7 +109,7 @@ export default function PropertiesPage() {
               {loading && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-4 py-6 text-center text-gray-500"
                   >
                     Loading properties...
@@ -113,7 +121,7 @@ export default function PropertiesPage() {
               {!loading && properties.length === 0 && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-4 py-6 text-center text-gray-500"
                   >
                     No properties found
@@ -130,9 +138,10 @@ export default function PropertiesPage() {
                       idx % 2 === 0 ? "bg-white" : "bg-gray-50"
                     } hover:bg-blue-50`}
                   >
-                    <td className="px-4 py-3 border-b border-gray-100 font-medium text-gray-900">
-                      {idx+1}
+                    <td className="px-4 py-3 border-b border-gray-100 font-medium">
+                      {(page - 1) * 10 + idx + 1}
                     </td>
+
                     <td className="px-4 py-3 border-b border-gray-100 font-medium text-gray-900">
                       {p.title}
                     </td>
@@ -170,7 +179,6 @@ export default function PropertiesPage() {
                       >
                         View
                       </Link>
-
                       <Link
                         href={`/properties/${p.id}/edit`}
                         className="text-green-600 hover:text-green-800"
@@ -182,6 +190,41 @@ export default function PropertiesPage() {
                 ))}
             </tbody>
           </table>
+        </div>
+
+        {/* ================= PAGINATION ================= */}
+        <div className="flex justify-between items-center mt-6">
+          <button
+            disabled={page === 1}
+            onClick={() => setPage((p) => p - 1)}
+            className="px-3 py-1.5 rounded-md bg-gray-200 text-gray-700 disabled:opacity-50"
+          >
+            Previous
+          </button>
+
+          <div className="flex gap-2">
+            {Array.from({ length: lastPage }).map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setPage(i + 1)}
+                className={`px-3 py-1.5 rounded-md text-sm ${
+                  page === i + 1
+                    ? "bg-[#0070BB] text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                {i + 1}
+              </button>
+            ))}
+          </div>
+
+          <button
+            disabled={page === lastPage}
+            onClick={() => setPage((p) => p + 1)}
+            className="px-3 py-1.5 rounded-md bg-gray-200 text-gray-700 disabled:opacity-50"
+          >
+            Next
+          </button>
         </div>
       </div>
     </div>

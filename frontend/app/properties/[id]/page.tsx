@@ -1,32 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import axiosInstance from "@/app/api/axiosInstance";
+import ProjectApi from "@/app/api/ProjectApis";
 
 export default function PropertyViewPage() {
   const params = useParams();
   const propertyId = params.id;
 
-  const property = {
-    title: "Modern Villa",
-    address: "123 Oak Street",
-    price: 500000,
-    sellerName: "Jane Smith",
-    type: "residential",
-    description: "Beautiful modern villa",
+  const [property, setProperty] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  /* ================= FETCH PROPERTY ================= */
+  useEffect(() => {
+    if (propertyId) fetchProperty();
+  }, [propertyId]);
+
+  const fetchProperty = async () => {
+    try {
+      setLoading(true);
+      const res = await axiosInstance.get(
+        `${ProjectApi.get_property_by_id}/${propertyId}`
+      );
+      setProperty(res.data.data || res.data);
+    } catch (err) {
+      console.error("Failed to load property", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const payments = [
-    { id: 1, amount: 100000, date: "2024-01-20" },
-    { id: 2, amount: 150000, date: "2024-02-15" },
-  ];
+  if (loading) {
+    return (
+      <div className="p-6 text-center text-gray-500">
+        Loading property details...
+      </div>
+    );
+  }
 
-  const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
-  const remaining = property.price - totalPaid;
+  if (!property) {
+    return (
+      <div className="p-6 text-center text-gray-500">
+        Property not found
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 text-black">
+      {/* HEADER */}
       <div className="mb-6">
         <Link
           href="/properties"
@@ -40,6 +64,7 @@ export default function PropertyViewPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* ================= PROPERTY INFO ================= */}
         <div className="lg:col-span-2 bg-white rounded-xl shadow-sm p-6 space-y-4 text-sm">
           <div className="flex justify-between">
             <h2 className="text-lg font-semibold">Property Information</h2>
@@ -53,9 +78,13 @@ export default function PropertyViewPage() {
 
           {[
             ["Title", property.title],
-            ["Type", property.type],
+            ["Transaction Type", property.transaction_type],
+            ["Category", property.category],
             ["Address", property.address],
-            ["Seller", property.sellerName],
+            [
+              property.transaction_type === "PURCHASE" ? "Seller" : "Buyer",
+              property.seller?.name || property.buyer?.name || "—",
+            ],
           ].map(([label, value]) => (
             <div key={label}>
               <p className="text-gray-500">{label}</p>
@@ -64,21 +93,52 @@ export default function PropertyViewPage() {
           ))}
 
           <div>
-            <p className="text-gray-500">Price</p>
+            <p className="text-gray-500">Total Amount</p>
             <p className="text-xl font-bold text-green-600">
-              ₹{property.price.toLocaleString()}
+              ₹{Number(property.total_amount).toLocaleString("en-IN")}
             </p>
           </div>
         </div>
 
+        {/* ================= PAYMENT SUMMARY ================= */}
         <div className="bg-white rounded-xl shadow-sm p-6 text-sm space-y-3">
           <h3 className="font-semibold">Payment Summary</h3>
-          <p>Total Paid: ₹{totalPaid.toLocaleString()}</p>
-          <p className="text-red-600 font-medium">
-            Remaining: ₹{remaining.toLocaleString()}
+
+          <p>
+            Paid Amount:{" "}
+            <span className="font-medium text-green-600">
+              ₹{Number(property.paid_amount).toLocaleString("en-IN")}
+            </span>
           </p>
+
+          <p className="text-red-600 font-medium">
+            Due Amount: ₹{Number(property.due_amount).toLocaleString("en-IN")}
+          </p>
+
+          <p>Status: {property.status}</p>
         </div>
       </div>
+
+      {/* ================= DOCUMENTS ================= */}
+      {property.documents?.length > 0 && (
+        <div className="mt-6 bg-white rounded-xl shadow-sm p-6">
+          <h3 className="font-semibold mb-3">Documents</h3>
+          <ul className="space-y-2 text-sm">
+            {property.documents.map((doc: any) => (
+              <li key={doc.id} className="flex justify-between items-center">
+                <span>{doc.doc_name}</span>
+                <a
+                  href={`${process.env.NEXT_PUBLIC_API_URL}/${doc.doc_file}`}
+                  target="_blank"
+                  className="text-blue-600 hover:underline"
+                >
+                  View
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

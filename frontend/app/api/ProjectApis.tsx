@@ -11,7 +11,8 @@ export const ProjectApi = {
   
   // Property
   create_properties: `${BASE_URL}/properties`,
-  all_properties: `${BASE_URL}/properties`
+  all_properties: `${BASE_URL}/properties`,
+  get_property_by_id: `${BASE_URL}/properties`
 
 
 };

@@ -21,7 +21,7 @@ export default function BuyPropertyPage() {
 
 
   const [formData, setFormData] = useState({
-    customer_id: "",
+    seller_id: "",
     title: "",
     category: "FLAT",
     rate: "",
@@ -55,7 +55,7 @@ export default function BuyPropertyPage() {
 
       const fd = new FormData();
       fd.append("transaction_type", "PURCHASE");
-      fd.append("customer_id", formData.customer_id);
+      fd.append("seller_id", formData.seller_id);
       fd.append("title", formData.title);
       fd.append("category", formData.category);
       fd.append("quantity", "1");
@@ -88,7 +88,7 @@ export default function BuyPropertyPage() {
 
       const fd = new FormData();
       fd.append("transaction_type", "PURCHASE");
-      fd.append("customer_id", formData.customer_id);
+      fd.append("seller_id", formData.seller_id);
       fd.append("title", formData.title);
       fd.append("category", formData.category);
       fd.append("quantity", "1");
@@ -152,9 +152,9 @@ export default function BuyPropertyPage() {
             <select
               required
               className={inputClass}
-              value={formData.customer_id}
+              value={formData.seller_id}
               onChange={(e) =>
-                setFormData({ ...formData, customer_id: e.target.value })
+                setFormData({ ...formData, seller_id: e.target.value })
               }
             >
               <option value="">Select Seller</option>
