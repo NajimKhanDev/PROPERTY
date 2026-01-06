@@ -17,6 +17,7 @@ export default function Header({
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
 
+  
   const [user, setUser] = useState<any>(null);
 
   const dropdownRef = useRef<HTMLDivElement | null>(null);
