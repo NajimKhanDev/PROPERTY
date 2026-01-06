@@ -13,36 +13,36 @@ use App\Http\Controllers\DocumentController;
 // Auth routes
 
 Route::post('/login', [UserController::class, 'login']);
-    Route::post('/register', [UserController::class, 'register']);
+Route::post('/register', [UserController::class, 'register']);
 
 // Protected Routes
 Route::middleware('auth:sanctum')->group(function () {
 
 
     Route::post('/change-password', [UserController::class, 'changePassword']);
-   // Logged-in user profile
+    // Logged-in user profile
     Route::get('/profile', [UserController::class, 'profile']);
 
     //  Users management
     Route::get('/users', [UserController::class, 'users']);
-    Route::get('/users/{id}',[UserController::class, 'profile']);
-    Route::put('/users/{id}', [UserController::class, 'updateUser']); 
-    Route::delete('/users/{id}', [UserController::class, 'deleteUser']); 
-    
+    Route::get('/users/{id}', [UserController::class, 'profile']);
+    Route::put('/users/{id}', [UserController::class, 'updateUser']);
+    Route::delete('/users/{id}', [UserController::class, 'deleteUser']);
+
     // --- Role CRUD Routes ---
     Route::get('/roles', [RoleController::class, 'index']);
-        Route::post('/roles', [RoleController::class, 'store']);
+    Route::post('/roles', [RoleController::class, 'store']);
     Route::get('/roles/{role}', [RoleController::class, 'show']);
     Route::put('/roles/{role}', [RoleController::class, 'update']);
     Route::delete('/roles/{role}', [RoleController::class, 'destroy']);
 
-// --- Soft Delete Extensions ---
-Route::get('/roles/trash', [RoleController::class, 'trashed']);   
-Route::patch('/roles/restore/{id}', [RoleController::class, 'restore']); 
+    // --- Soft Delete Extensions ---
+    Route::get('/roles/trash', [RoleController::class, 'trashed']);
+    Route::patch('/roles/restore/{id}', [RoleController::class, 'restore']);
 
 
 
-// Custom routes
+    // Custom routes
     Route::get('customers/trash', [CustomerController::class, 'trash']);
     Route::post('customers/{id}/restore', [CustomerController::class, 'restore']);
 
@@ -53,8 +53,8 @@ Route::patch('/roles/restore/{id}', [RoleController::class, 'restore']);
     Route::get('/customers/{id}', [CustomerController::class, 'show']);
     Route::delete('/customers/{id}', [CustomerController::class, 'destroy']);
 
-//Documents
-// Trash & Restore
+    //Documents
+    // Trash & Restore
     Route::get('property-docs/trash', [PropertyDocumentController::class, 'trash']); // ?property_id=1
     Route::post('property-docs/{id}/restore', [PropertyDocumentController::class, 'restore']);
 
@@ -63,13 +63,9 @@ Route::patch('/roles/restore/{id}', [RoleController::class, 'restore']);
     Route::post('property-docs', [PropertyDocumentController::class, 'store']);
     Route::delete('property-docs/{id}', [PropertyDocumentController::class, 'destroy']);
 
-    Route::get('properties',[PropertyController::class, 'index']);
-    Route::post('properties',[PropertyController::class, 'store']);
-    Route::get('properties/{id}',[PropertyController::class, 'show']);
-    Route::put('properties/{id}',[PropertyController::class, 'update']);
-    Route::delete('properties/{id}',[PropertyController::class, 'destroy']);
-
-
-
-
+    Route::get('properties', [PropertyController::class, 'index']);
+    Route::post('properties', [PropertyController::class, 'store']);
+    Route::get('properties/{id}', [PropertyController::class, 'show']);
+    Route::put('properties/{id}', [PropertyController::class, 'update']);
+    Route::delete('properties/{id}', [PropertyController::class, 'destroy']);
 });

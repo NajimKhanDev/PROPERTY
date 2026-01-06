@@ -17,7 +17,7 @@ export default function Header({
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
 
-  
+
   const [user, setUser] = useState<any>(null);
 
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -121,7 +121,7 @@ export default function Header({
             </p>
 
             <p className="text-xs text-gray-400 mb-3">
-              Role: {user?.role_data?.name || user?.role}
+              Role: {user?.role_data?.name || user?.role?.role_name || "-"}
             </p>
 
             {/* VIEW PROFILE */}
