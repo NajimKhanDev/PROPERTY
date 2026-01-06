@@ -45,7 +45,8 @@ return new class extends Migration
             $table->integer('bhk')->nullable(); 
             $table->decimal('super_built_up_area', 10, 2)->nullable(); 
 
-            $table->enum('status', ['AVAILABLE', 'SOLD'])->default('AVAILABLE');
+           // Status column update
+           $table->enum('status', ['AVAILABLE', 'SOLD', 'BOOKED'])->default('AVAILABLE');
             $table->boolean('is_deleted')->default(0);
             $table->timestamps();
         });

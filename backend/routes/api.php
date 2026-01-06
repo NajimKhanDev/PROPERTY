@@ -85,4 +85,7 @@ Route::patch('/roles/restore/{id}', [RoleController::class, 'restore']);
     Route::get('/reports/dues', [ReportController::class, 'getDuesReport']);
     Route::get('/reports/sales-performance', [ReportController::class, 'getSoldPropertiesPnL']);
     Route::get('/reports/charts/monthly', [ReportController::class, 'getMonthlyTrend']);
+
+    //Sell Property
+    Route::apiResource('sell-properties', SellPropertyController::class);
 });
