@@ -13,7 +13,9 @@ return new class extends Migration
             
             // Link to Property
             $table->foreignId('property_id')->constrained('properties')->onDelete('cascade');
-            
+            // Specific Deal Link (Only for Sales transactions)
+       $table->unsignedBigInteger('sell_property_id')->nullable();
+$table->foreign('sell_property_id')->references('id')->on('sell_properties')->onDelete('cascade');
             // Payment Info
             $table->decimal('amount', 15, 2); // Amount Paid
             $table->date('payment_date');

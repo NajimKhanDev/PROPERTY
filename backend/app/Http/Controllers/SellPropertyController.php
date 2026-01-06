@@ -15,7 +15,7 @@ class SellPropertyController extends Controller
     public function index(Request $request)
     {
         // Fetch data
-        $query = SellProperty::with(['property', 'buyer:id,name,phone','transactions'])
+        $query = SellProperty::with(['property', 'buyer:id,name,phone', 'transactions'])
                              ->where('is_deleted', 0)
                              ->latest('sale_date');
 
@@ -105,14 +105,15 @@ class SellPropertyController extends Controller
             // Record income
             if ($paid > 0) {
                 Transaction::create([
-                    'property_id'  => $property->id,
-                    'type'         => 'CREDIT', // Money in
-                    'amount'       => $paid,
-                    'payment_date' => $request->sale_date ?? now(),
-                    'payment_mode' => $request->payment_mode ?? 'CASH',
-                    'reference_no' => $request->reference_no ?? 'TXN-' . rand(100,999),
-                    'remarks'      => 'Initial sale payment',
-                    'is_deleted'   => 0
+                    'property_id'      => $property->id,
+                    'sell_property_id' => $sale->id, // LINK TO THIS DEAL
+                    'type'             => 'CREDIT',  // Money in
+                    'amount'           => $paid,
+                    'payment_date'     => $request->sale_date ?? now(),
+                    'payment_mode'     => $request->payment_mode ?? 'CASH',
+                    'reference_no'     => $request->reference_no ?? 'TXN-' . rand(100,999),
+                    'remarks'          => 'Initial sale payment',
+                    'is_deleted'       => 0
                 ]);
             }
 
@@ -129,7 +130,7 @@ class SellPropertyController extends Controller
     // Show details
     public function show($id)
     {
-        $sale = SellProperty::with(['property', 'buyer','transactions'])
+        $sale = SellProperty::with(['property', 'buyer', 'transactions'])
                             ->where('id', $id)
                             ->where('is_deleted', 0)
                             ->firstOrFail();
@@ -218,13 +219,13 @@ class SellPropertyController extends Controller
 
             // Revert inventory
             $sale->property()->update([
-                'status' => 'AVAILABLE',
+                'status'   => 'AVAILABLE',
                 'buyer_id' => null
             ]);
 
-            // Remove income
-            Transaction::where('property_id', $sale->property_id)
-                       ->where('type', 'CREDIT')
+            // Remove transactions
+            // Strict check: only transactions linked to THIS sale deal
+            Transaction::where('sell_property_id', $sale->id)
                        ->update(['is_deleted' => 1]);
 
             DB::commit();

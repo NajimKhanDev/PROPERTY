@@ -4,14 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Models\Transaction;
 use App\Models\Property;
+use App\Models\SellProperty;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 class TransactionController extends Controller
 {
+    // List transactions
     public function index(Request $request)
     {
+        // Validate input
         $validator = Validator::make($request->all(), [
             'property_id' => 'required|exists:properties,id'
         ]);
@@ -20,40 +23,39 @@ class TransactionController extends Controller
             return response()->json(['status' => false, 'errors' => $validator->errors()], 400);
         }
 
-        try {
-            $transactions = Transaction::where('property_id', $request->property_id)
-                ->where('is_deleted', 0)
-                ->latest('payment_date')
-                ->get();
+        // Fetch data
+        $transactions = Transaction::with('sale_deal:id,invoice_no,customer_id')
+            ->where('property_id', $request->property_id)
+            ->where('is_deleted', 0)
+            ->latest('payment_date')
+            ->get();
 
-            $property = Property::find($request->property_id);
+        // Calculate summary
+        $totalCredit = $transactions->where('type', 'CREDIT')->sum('amount');
+        $totalDebit  = $transactions->where('type', 'DEBIT')->sum('amount');
 
-            return response()->json([
-                'status' => true,
-                'message' => 'Transactions fetched successfully.',
-                'summary' => [
-                    'total_deal_value' => $property->total_amount,
-                    'total_paid'       => $property->paid_amount,
-                    'remaining_due'    => $property->due_amount,
-                    'payment_status'   => ($property->due_amount <= 0) ? 'FULLY PAID' : 'PENDING'
-                ],
-                'data' => $transactions
-            ], 200);
-
-        } catch (\Exception $e) {
-            return response()->json(['status' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
-        }
+        return response()->json([
+            'status'  => true,
+            'summary' => [
+                'total_income'  => $totalCredit,
+                'total_expense' => $totalDebit
+            ],
+            'data'    => $transactions
+        ]);
     }
 
+    // Create transaction
     public function store(Request $request)
     {
+        // Validate inputs
         $validator = Validator::make($request->all(), [
-            'property_id'  => 'required|exists:properties,id',
-            'amount'       => 'required|numeric|gt:0',
-            'payment_date' => 'required|date',
-            'payment_mode' => 'required|in:CASH,ONLINE,CHEQUE,UPI,DD',
-            'reference_no' => 'nullable|string|max:100',
-            'remarks'      => 'nullable|string|max:500'
+            'property_id'      => 'required|exists:properties,id',
+            'sell_property_id' => 'nullable|exists:sell_properties,id',
+            'amount'           => 'required|numeric|gt:0',
+            'payment_date'     => 'required|date',
+            'payment_mode'     => 'required|in:CASH,ONLINE,CHEQUE,UPI,DD',
+            'reference_no'     => 'nullable|string|max:100',
+            'remarks'          => 'nullable|string|max:500'
         ]);
 
         if ($validator->fails()) {
@@ -61,76 +63,84 @@ class TransactionController extends Controller
         }
 
         DB::beginTransaction();
-
         try {
-            $property = Property::where('id', $request->property_id)->lockForUpdate()->first();
+            // CASE 1: SALE INCOME (CREDIT)
+            if ($request->filled('sell_property_id')) {
+                $deal = SellProperty::where('id', $request->sell_property_id)->lockForUpdate()->first();
+                
+                // Check limits
+                if ($request->amount > ($deal->pending_amount + 0.01)) {
+                     return response()->json(['status' => false, 'message' => 'Exceeds pending balance'], 400);
+                }
 
-            if ($property->due_amount <= 0) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Transaction Rejected: This property is already fully paid.'
-                ], 400);
+                // Create credit
+                $transaction = Transaction::create(array_merge($request->all(), [
+                    'type'       => 'CREDIT', 
+                    'is_deleted' => 0
+                ]));
+
+                // Update sale
+                $deal->update([
+                    'received_amount' => $deal->received_amount + $request->amount,
+                    'pending_amount'  => $deal->total_sale_amount - ($deal->received_amount + $request->amount)
+                ]);
+                
+                // Update status
+                $deal->property()->update(['status' => ($deal->fresh()->pending_amount <= 0) ? 'SOLD' : 'BOOKED']);
+                
+                $msg = "Payment received successfully";
+            } 
+            
+            // CASE 2: PURCHASE EXPENSE (DEBIT)
+            else {
+                $property = Property::where('id', $request->property_id)->lockForUpdate()->first();
+                
+                // Check limits
+                if ($request->amount > ($property->due_amount + 0.01)) {
+                    return response()->json(['status' => false, 'message' => 'Exceeds vendor due'], 400);
+                }
+
+                // Create debit
+                $transaction = Transaction::create(array_merge($request->all(), [
+                    'type'             => 'DEBIT', 
+                    'sell_property_id' => null, 
+                    'is_deleted'       => 0
+                ]));
+
+                // Update inventory
+                $property->update([
+                    'paid_amount' => $property->paid_amount + $request->amount,
+                    'due_amount'  => $property->total_amount - ($property->paid_amount + $request->amount)
+                ]);
+                
+                $msg = "Payment paid successfully";
             }
-
-            if ($request->amount > ($property->due_amount + 0.01)) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Transaction Rejected: You cannot pay more than the Due Amount.',
-                    'current_due_amount' => $property->due_amount
-                ], 400);
-            }
-
-            $transaction = Transaction::create([
-                'property_id'  => $request->property_id,
-                'amount'       => $request->amount,
-                'payment_date' => $request->payment_date,
-                'payment_mode' => $request->payment_mode,
-                'reference_no' => $request->reference_no,
-                'remarks'      => $request->remarks,
-                'is_deleted'   => 0
-            ]);
-
-            $newPaidAmount = $property->paid_amount + $request->amount;
-            $newDueAmount  = $property->total_amount - $newPaidAmount;
-
-            if ($newDueAmount < 0) $newDueAmount = 0;
-
-            $property->update([
-                'paid_amount' => $newPaidAmount,
-                'due_amount'  => $newDueAmount
-            ]);
 
             DB::commit();
-
-            return response()->json([
-                'status' => true,
-                'message' => 'Payment recorded successfully.',
-                'new_balances' => [
-                    'paid' => $newPaidAmount,
-                    'due'  => $newDueAmount
-                ],
-                'data' => $transaction
-            ], 201);
+            return response()->json(['status' => true, 'message' => $msg, 'data' => $transaction], 201);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['status' => false, 'message' => 'Server Error: ' . $e->getMessage()], 500);
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
+    // Show single
     public function show($id)
     {
-        $transaction = Transaction::where('id', $id)->where('is_deleted', 0)->first();
+        $transaction = Transaction::with('sale_deal')->where('id', $id)->where('is_deleted', 0)->first();
 
         if (!$transaction) {
-            return response()->json(['status' => false, 'message' => 'Transaction not found.'], 404);
+            return response()->json(['status' => false, 'message' => 'Not found'], 404);
         }
 
-        return response()->json(['status' => true, 'data' => $transaction], 200);
+        return response()->json(['status' => true, 'data' => $transaction]);
     }
 
+    // Update transaction
     public function update(Request $request, $id)
     {
+        // Validate inputs
         $validator = Validator::make($request->all(), [
             'amount'       => 'required|numeric|gt:0',
             'payment_date' => 'required|date',
@@ -144,87 +154,85 @@ class TransactionController extends Controller
         }
 
         DB::beginTransaction();
-
         try {
-            $transaction = Transaction::where('id', $id)->where('is_deleted', 0)->firstOrFail();
-            $property = Property::where('id', $transaction->property_id)->lockForUpdate()->first();
+            $txn = Transaction::where('id', $id)->where('is_deleted', 0)->lockForUpdate()->firstOrFail();
 
-            $tempPaid = $property->paid_amount - $transaction->amount;
-            $tempDue  = $property->total_amount - $tempPaid;
-
-            if ($request->amount > ($tempDue + 0.01)) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Update Rejected: New amount exceeds the total pending balance.'
-                ], 400);
+            // REVERT OLD EFFECT
+            if ($txn->type === 'CREDIT' && $txn->sell_property_id) {
+                $deal = SellProperty::find($txn->sell_property_id);
+                $deal->decrement('received_amount', $txn->amount);
+                $deal->increment('pending_amount', $txn->amount);
+            } elseif ($txn->type === 'DEBIT') {
+                $prop = Property::find($txn->property_id);
+                $prop->decrement('paid_amount', $txn->amount);
+                $prop->increment('due_amount', $txn->amount);
             }
 
-            $finalPaid = $tempPaid + $request->amount;
-            $finalDue  = $property->total_amount - $finalPaid;
+            // APPLY NEW EFFECT
+            if ($txn->type === 'CREDIT' && $txn->sell_property_id) {
+                $deal = $deal->fresh(); // Reload
+                if ($request->amount > ($deal->pending_amount + $txn->amount)) { // Check limit
+                     throw new \Exception("New amount exceeds sale pending balance");
+                }
+                $deal->increment('received_amount', $request->amount);
+                $deal->decrement('pending_amount', $request->amount);
+                
+                // Update status
+                $deal->property()->update(['status' => ($deal->pending_amount <= 0) ? 'SOLD' : 'BOOKED']);
 
-            $property->update([
-                'paid_amount' => $finalPaid,
-                'due_amount'  => $finalDue
-            ]);
+            } elseif ($txn->type === 'DEBIT') {
+                $prop = $prop->fresh(); // Reload
+                if ($request->amount > ($prop->due_amount + $txn->amount)) { // Check limit
+                    throw new \Exception("New amount exceeds vendor due balance");
+                }
+                $prop->increment('paid_amount', $request->amount);
+                $prop->decrement('due_amount', $request->amount);
+            }
 
-            $transaction->update([
-                'amount'       => $request->amount,
-                'payment_date' => $request->payment_date,
-                'payment_mode' => $request->payment_mode,
-                'reference_no' => $request->reference_no,
-                'remarks'      => $request->remarks,
-            ]);
+            // Update record
+            $txn->update($request->only(['amount', 'payment_date', 'payment_mode', 'reference_no', 'remarks']));
 
             DB::commit();
-
-            return response()->json([
-                'status' => true,
-                'message' => 'Transaction updated successfully.',
-                'data' => $transaction
-            ], 200);
+            return response()->json(['status' => true, 'message' => 'Updated successfully', 'data' => $txn]);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['status' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
+    // Delete transaction
     public function destroy($id)
     {
         DB::beginTransaction();
-
         try {
-            $transaction = Transaction::where('id', $id)->where('is_deleted', 0)->first();
+            $txn = Transaction::where('id', $id)->where('is_deleted', 0)->lockForUpdate()->firstOrFail();
 
-            if (!$transaction) {
-                return response()->json(['status' => false, 'message' => 'Transaction not found.'], 404);
+            // Revert balances
+            if ($txn->type === 'CREDIT' && $txn->sell_property_id) {
+                // Revert Sale
+                $deal = SellProperty::find($txn->sell_property_id);
+                $deal->decrement('received_amount', $txn->amount);
+                $deal->increment('pending_amount', $txn->amount);
+                // Revert Status
+                $deal->property()->update(['status' => 'BOOKED']); 
+            } 
+            elseif ($txn->type === 'DEBIT') {
+                // Revert Inventory
+                $prop = Property::find($txn->property_id);
+                $prop->decrement('paid_amount', $txn->amount);
+                $prop->increment('due_amount', $txn->amount);
             }
 
-            $property = Property::where('id', $transaction->property_id)->lockForUpdate()->first();
-
-            $newPaidAmount = $property->paid_amount - $transaction->amount;
-            $newDueAmount  = $property->total_amount - $newPaidAmount;
-
-            if ($newPaidAmount < 0) $newPaidAmount = 0;
-
-            $property->update([
-                'paid_amount' => $newPaidAmount,
-                'due_amount'  => $newDueAmount
-            ]);
-
-            $transaction->update(['is_deleted' => 1]);
+            // Soft delete
+            $txn->update(['is_deleted' => 1]);
 
             DB::commit();
-
-            return response()->json([
-                'status' => true,
-                'message' => 'Transaction deleted. Amount reverted.',
-                'current_due' => $newDueAmount
-            ], 200);
+            return response()->json(['status' => true, 'message' => 'Transaction reversed']);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['status' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
         }
     }
 }
