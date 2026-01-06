@@ -133,22 +133,35 @@ class ReportController extends Controller
      * 3. OUTSTANDING DUES (Recovery List)
 
      */
-    public function getDuesReport(Request $request)
+  public function getDuesReport(Request $request)
     {
-        $query = Property::select('id', 'title', 'party_name', 'party_phone', 'total_amount', 'paid_amount', 'due_amount', 'date')
+        // 1. Query Start
+        
+        $query = Property::with('customer:id,name,phone') 
+            ->select('id', 'customer_id', 'title', 'total_amount', 'paid_amount', 'due_amount', 'date')
             ->where('transaction_type', 'SELL') 
             ->where('due_amount', '>', 0)   
             ->where('is_deleted', 0);
 
+        // 2. Search Logic 
         if ($request->filled('search')) {
-            $query->where('party_name', 'like', '%' . $request->search . '%');
+            $search = $request->search;
+            $query->whereHas('customer', function($q) use ($search) {
+                $q->where('name', 'like', '%' . $search . '%')
+                  ->orWhere('phone', 'like', '%' . $search . '%');
+            });
         }
 
+        // 3. Calculation
+        
+        $totalPending = (clone $query)->sum('due_amount');
+
+        // 4. Pagination
         $defaulters = $query->orderBy('due_amount', 'desc')->paginate(20);
 
         return response()->json([
             'status' => true,
-            'total_pending_amount' => $query->sum('due_amount'), 
+            'total_pending_amount' => $totalPending, 
             'data' => $defaulters
         ]);
     }

@@ -8,7 +8,7 @@ use App\Models\Role;
 use App\Models\Customer;
 use App\Models\Property;
 use App\Models\Transaction;
-use App\Models\PropertyDocument;
+use App\Models\PropertyDocument; 
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Faker\Factory as Faker;
@@ -17,7 +17,8 @@ class DatabaseSeeder extends Seeder
 {
     public function run()
     {
-        $faker = Faker::create();
+        // 1. Indian Data Faker
+        $faker = Faker::create('en_IN'); // 'en_IN' generates Indian Names & Addresses
 
         DB::beginTransaction();
 
@@ -27,6 +28,7 @@ class DatabaseSeeder extends Seeder
             // ==========================================
             $role = Role::firstOrCreate(['id' => 1], [
                 'role_name' => 'Super Admin',
+                'permissions' => ['all' => true], // Full access
                 'status' => 1, 'is_deleted' => 0, 'user_id' => 0
             ]);
 
@@ -40,65 +42,95 @@ class DatabaseSeeder extends Seeder
             $this->command->info('Admin Created: admin@gmail.com / admin@1234');
 
             // ==========================================
-            // 2. CREATE 10 CUSTOMERS
+            // 2. CREATE 20 INDIAN CUSTOMERS
             // ==========================================
             $customers = [];
             $types = ['SELLER', 'BUYER', 'BOTH'];
 
-            for ($i = 0; $i < 10; $i++) {
+            for ($i = 0; $i < 20; $i++) {
                 $customers[] = Customer::create([
-                    'name' => $faker->name,
-                    'phone' => $faker->numerify('9#########'),
+                    'name' => $faker->name, // Generates: Rajesh Kumar, Priya Singh, etc.
+                    'phone' => '9' . $faker->numerify('#########'), // Indian Mobile Format
                     'email' => $faker->unique()->safeEmail,
-                    'address' => $faker->address,
+                    'address' => $faker->address, // Generates: Sector 14, Gurgaon, etc.
                     'type' => $types[array_rand($types)],
                     'created_by' => $user->id,
                     'is_deleted' => 0
                 ]);
             }
-            $this->command->info('10 Customers Created.');
+            $this->command->info('20 Indian Customers Created.');
 
             // ==========================================
-            // 3. CREATE PROPERTIES & TRANSACTIONS
+            // 3. CREATE PROPERTIES (Detailed Indian Context)
             // ==========================================
-            
-            // Logic: Mix of Purchase (Kharcha) and Sell (Kamai)
-            // Categories: LAND, FLAT, HOUSE, COMMERCIAL
             
             $categories = ['LAND', 'FLAT', 'HOUSE', 'COMMERCIAL', 'AGRICULTURE'];
-            $transactionTypes = ['PURCHASE', 'SELL'];
+            $txnTypes = ['PURCHASE', 'SELL'];
 
-            for ($i = 0; $i < 15; $i++) {
+            for ($i = 0; $i < 25; $i++) {
                 
-                // Random Selection
                 $cat = $categories[array_rand($categories)];
-                $txnType = $transactionTypes[array_rand($transactionTypes)];
+                $txnType = $txnTypes[array_rand($txnTypes)];
                 $randomCustomer = $customers[array_rand($customers)];
 
-                // Calculation Logic
+                // --- A. CATEGORY SPECIFIC DATA ---
+                $areaDismil = null;
+                $plotNo = null;
+                $khataNo = null;
+                $houseNo = null;
+                $floorNo = null;
+                $bhk = null;
+                $superArea = null;
+
+                if ($cat == 'LAND' || $cat == 'AGRICULTURE') {
+                    $areaDismil = $faker->randomFloat(2, 2, 50); // e.g., 5.50 Dismil
+                    $plotNo = 'P-' . $faker->numberBetween(100, 999);
+                    $khataNo = 'K-' . $faker->numberBetween(10, 99) . '/B';
+                } 
+                elseif ($cat == 'FLAT') {
+                    $floorNo = $faker->numberBetween(1, 15);
+                    $bhk = $faker->randomElement([2, 3, 4]);
+                    $superArea = $bhk * 450; // Approx sqft
+                    $houseNo = $floorNo . '0' . $faker->randomDigitNotNull;
+                }
+                elseif ($cat == 'HOUSE' || $cat == 'COMMERCIAL') {
+                    $houseNo = $faker->numberBetween(1, 200);
+                    $superArea = $faker->numberBetween(1000, 5000);
+                    $plotNo = 'Sec-' . $faker->numberBetween(1, 50);
+                }
+
+                // --- B. FINANCIALS ---
                 $qty = 1;
-                // Rate between 5 Lakh to 50 Lakh
-                $rate = $faker->numberBetween(5, 50) * 100000; 
+                // Rate: 5 Lakh to 1 Crore
+                $rate = $faker->numberBetween(5, 100) * 100000; 
                 $baseAmount = $qty * $rate;
-
-                // GST (0%, 5%, 12%, 18%)
-                $gstPercent = $faker->randomElement([0, 5, 12]);
+                $gstPercent = ($cat == 'LAND') ? 0 : 5; // Land pe 0, baaki pe 5%
                 $gstAmount = ($baseAmount * $gstPercent) / 100;
-
-                // Expenses (10k to 50k)
-                $otherExpenses = $faker->numberBetween(10, 50) * 1000;
-
+                $otherExpenses = $faker->numberBetween(10, 100) * 1000; // Registry etc.
                 $totalAmount = $baseAmount + $gstAmount + $otherExpenses;
 
-                // Create Property (Initially 0 Paid, we will add via Transaction)
+                // --- C. SELLER vs BUYER LOGIC ---
+                $sellerId = null;
+                $buyerId = null;
+
+                if ($txnType == 'PURCHASE') {
+                    $sellerId = $randomCustomer->id;
+                    $titlePrefix = "Purchased from " . explode(' ', $randomCustomer->name)[0];
+                } else {
+                    $buyerId = $randomCustomer->id;
+                    $titlePrefix = "Sold to " . explode(' ', $randomCustomer->name)[0];
+                }
+
+                // Create Property
                 $property = Property::create([
-                    'date' => $faker->dateTimeBetween('-6 months', 'now'), // Pichle 6 mahine ka data
+                    'date' => $faker->dateTimeBetween('-1 year', 'now'),
                     'transaction_type' => $txnType,
-                    'customer_id' => $randomCustomer->id,
-                    'invoice_no' => 'INV-' . strtoupper(substr($txnType, 0, 3)) . '-' . ($i + 100),
-                    'title' => "$cat Deal in " . $faker->city,
+                    'seller_id' => $sellerId,
+                    'buyer_id' => $buyerId,
+                    'invoice_no' => 'INV-' . strtoupper(substr($txnType, 0, 1)) . rand(1000, 9999),
+                    'title' => "$titlePrefix - $cat in " . $faker->city,
                     'category' => $cat,
-                    'address' => $faker->address,
+                    'address' => $faker->streetAddress . ', ' . $faker->city,
                     'quantity' => $qty,
                     'rate' => $rate,
                     'base_amount' => $baseAmount,
@@ -106,83 +138,88 @@ class DatabaseSeeder extends Seeder
                     'gst_amount' => $gstAmount,
                     'other_expenses' => $otherExpenses,
                     'total_amount' => $totalAmount,
-                    'paid_amount' => 0, // Will update below
-                    'due_amount' => $totalAmount, // Will update below
+                    
+                    // Specific Details
+                    'area_dismil' => $areaDismil,
+                    'plot_number' => $plotNo,
+                    'khata_number' => $khataNo,
+                    'house_number' => $houseNo,
+                    'floor_number' => $floorNo,
+                    'bhk' => $bhk,
+                    'super_built_up_area' => $superArea,
+                    
+                    'paid_amount' => 0, // Update niche karenge
+                    'due_amount' => $totalAmount,
                     'status' => 'AVAILABLE',
                     'is_deleted' => 0
                 ]);
 
-                // --- 4. CREATE TRANSACTIONS (EMIs) ---
+                // --- 4. TRANSACTIONS (Booking + EMIs) ---
+                $paidSoFar = 0;
                 
-                // Scenario: Kisi ne pura paisa diya, kisi ne aadha, kisi ne kuch nahi
-                $paymentScenario = $faker->randomElement(['FULL', 'PARTIAL', 'BOOKING_ONLY']);
-                $transactionsTotal = 0;
+                // 1. Initial Booking (Almost always happens)
+                $bookingAmt = $faker->randomFloat(2, 50000, 200000);
+                if ($bookingAmt > $totalAmount) $bookingAmt = $totalAmount;
 
-                // First Payment (Booking) - Always happens usually
-                $bookingAmount = 0;
-                if ($paymentScenario == 'FULL') {
-                    $bookingAmount = $totalAmount; // Ek baar me pura paisa
-                    $property->update(['status' => ($txnType == 'SELL' ? 'SOLD' : 'AVAILABLE')]);
-                } elseif ($paymentScenario == 'PARTIAL') {
-                    $bookingAmount = $totalAmount * 0.40; // 40% Booking
-                } else {
-                    $bookingAmount = 50000; // Sirf token money
+                Transaction::create([
+                    'property_id' => $property->id,
+                    'amount' => $bookingAmt,
+                    'payment_date' => $property->date,
+                    'payment_mode' => $faker->randomElement(['CASH', 'UPI', 'NEFT']),
+                    'reference_no' => $faker->regexify('[A-Z]{4}00[0-9]{6}'),
+                    'remarks' => 'Token Money / Booking',
+                    'is_deleted' => 0
+                ]);
+                $paidSoFar += $bookingAmt;
+
+                // 2. Random 2nd Payment (Some properties are partially paid)
+                if ($faker->boolean(70)) { // 70% chance of 2nd payment
+                    $emiAmt = $faker->randomFloat(2, 100000, 500000);
+                    // Ensure we don't overpay
+                    if (($paidSoFar + $emiAmt) <= $totalAmount) {
+                         Transaction::create([
+                            'property_id' => $property->id,
+                            'amount' => $emiAmt,
+                            'payment_date' => $faker->dateTimeBetween($property->date, 'now'),
+                            'payment_mode' => 'CHEQUE',
+                            'reference_no' => 'CHQ-' . $faker->numberBetween(100000, 999999),
+                            'remarks' => 'First Installment',
+                            'is_deleted' => 0
+                        ]);
+                        $paidSoFar += $emiAmt;
+                    }
                 }
 
-                // Add 1st Transaction
-                if ($bookingAmount > 0) {
-                    Transaction::create([
-                        'property_id' => $property->id,
-                        'amount' => $bookingAmount,
-                        'payment_date' => $property->date, // Same as deal date
-                        'payment_mode' => $faker->randomElement(['CASH', 'ONLINE', 'CHEQUE']),
-                        'reference_no' => $faker->swiftBicNumber,
-                        'remarks' => 'Booking / Down Payment',
-                        'is_deleted' => 0
-                    ]);
-                    $transactionsTotal += $bookingAmount;
+                // If fully paid, mark status
+                if ($paidSoFar >= $totalAmount - 100) { // Small buffer
+                    $property->status = ($txnType == 'SELL') ? 'SOLD' : 'AVAILABLE';
                 }
-
-                // Add 2nd Transaction (Agar partial hai to 1 mahine baad ek aur payment)
-                if ($paymentScenario == 'PARTIAL') {
-                    $secondInstallment = $totalAmount * 0.20; // 20% aur diya
-                    
-                    Transaction::create([
-                        'property_id' => $property->id,
-                        'amount' => $secondInstallment,
-                        'payment_date' => $faker->dateTimeBetween($property->date, 'now'),
-                        'payment_mode' => 'ONLINE',
-                        'remarks' => '2nd Installment',
-                        'is_deleted' => 0
-                    ]);
-                    $transactionsTotal += $secondInstallment;
-                }
-
-                // Update Property Paid/Due
+                
+                // Update final totals
                 $property->update([
-                    'paid_amount' => $transactionsTotal,
-                    'due_amount' => $totalAmount - $transactionsTotal
+                    'paid_amount' => $paidSoFar,
+                    'due_amount' => $totalAmount - $paidSoFar,
+                    'status' => $property->status // Save updated status
                 ]);
 
-                // --- 5. CREATE DOCUMENTS ---
-                $docNames = ['Registry Paper', 'Aadhar Card', 'Pan Card', 'Agreement Copy'];
-                $randomDoc = $docNames[array_rand($docNames)];
+                // --- 5. DOCUMENTS (Indian Context) ---
+                $docTypes = ['Registry Paper', '7/12 Extract', 'Aadhar Copy', 'Pan Card', 'Sale Deed'];
+                $docName = $faker->randomElement($docTypes);
 
                 PropertyDocument::create([
                     'property_id' => $property->id,
-                    'doc_name' => $randomDoc,
-                    'doc_file' => 'documents/dummy.pdf', // Dummy path
+                    'doc_name' => $docName,
+                    'doc_file' => 'documents/sample.pdf',
                     'is_deleted' => 0
                 ]);
             }
 
-            $this->command->info('15 Properties, Related Transactions & Documents Created!');
-
+            $this->command->info('25 Detailed Indian Properties & Transactions Created!');
             DB::commit();
 
         } catch (\Exception $e) {
             DB::rollBack();
-            $this->command->error('Seeding Error: ' . $e->getMessage());
+            $this->command->error('Error: ' . $e->getMessage());
         }
     }
 }
