@@ -7,19 +7,19 @@ use App\Models\SellProperty;
 use App\Models\Transaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage; // Added for files
+use Illuminate\Support\Facades\Storage; 
 
 class SellPropertyController extends Controller
 {
-    // List Sales
+    // List sales
     public function index(Request $request)
     {
-        // Fetch Data
-        $query = SellProperty::with(['property', 'buyer:id,name,phone'])
+        // Fetch data
+        $query = SellProperty::with(['property', 'buyer:id,name,phone','transactions'])
                              ->where('is_deleted', 0)
                              ->latest('sale_date');
 
-        // Apply Search
+        // Apply search
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
@@ -36,100 +36,105 @@ class SellPropertyController extends Controller
         return response()->json($query->paginate(10));
     }
 
-    // Create Sale
+    // Create sale
     public function store(Request $request)
     {
-        // Validate Input
+        // Validate input
         $request->validate([
             'property_id'    => 'required|exists:properties,id',
             'customer_id'    => 'required|exists:customers,id',
             'sale_rate'      => 'required|numeric|min:1',
             'gst_percentage' => 'nullable|integer|min:0',
             'paid_amount'    => 'nullable|numeric|min:0',
-            'document'       => 'nullable|file|mimes:pdf,jpg,png|max:5120' // 5MB Max
+            'document'       => 'nullable|file|mimes:pdf,jpg,png|max:5120'
         ]);
 
         DB::beginTransaction();
         try {
-            // Check Availability
+            // Check availability
             $property = Property::findOrFail($request->property_id);
             if ($property->status === 'SOLD') {
-                return response()->json(['message' => 'Already sold!'], 400);
+                return response()->json(['message' => 'Property already sold'], 400);
             }
 
-            // Handle File
+            // Upload file
             $docPath = null;
             if ($request->hasFile('document')) {
                 $docPath = $request->file('document')->store('sale_docs', 'public');
             }
 
-            // Calculate Totals
-            $quantity   = $property->quantity;
+            // Calculate financials
+            $quantity   = $property->quantity ?? 1;
             $baseAmount = $request->sale_rate * $quantity;
-            
             $gstPercent = $request->gst_percentage ?? 0;
             $gstAmount  = ($baseAmount * $gstPercent) / 100;
-            
-            $otherCharges = $request->other_charges ?? 0;
-            $discount     = $request->discount ?? 0;
+            $other      = $request->other_charges ?? 0;
+            $discount   = $request->discount ?? 0;
 
-            $totalSaleVal = ($baseAmount + $gstAmount + $otherCharges) - $discount;
-            $initialPay   = $request->paid_amount ?? 0;
+            $totalVal   = ($baseAmount + $gstAmount + $other) - $discount;
+            $paid       = $request->paid_amount ?? 0;
+            $pending    = $totalVal - $paid;
 
-            // Save Sale
+            // Create record
             $sale = SellProperty::create([
                 'property_id'       => $property->id,
                 'customer_id'       => $request->customer_id,
                 'sale_date'         => $request->sale_date ?? now(),
-                'invoice_no'        => $request->invoice_no,
+                'invoice_no'        => $request->invoice_no ?? 'INV-' . time(),
                 'sale_rate'         => $request->sale_rate,
                 'sale_base_amount'  => $baseAmount,
                 'gst_percentage'    => $gstPercent,
                 'gst_amount'        => $gstAmount,
-                'other_charges'     => $otherCharges,
+                'other_charges'     => $other,
                 'discount_amount'   => $discount,
-                'total_sale_amount' => $totalSaleVal,
-                'received_amount'   => $initialPay,
-                'pending_amount'    => $totalSaleVal - $initialPay,
-                'document_file'     => $docPath, // Save Path
+                'total_sale_amount' => $totalVal,
+                'received_amount'   => $paid,
+                'pending_amount'    => $pending,
+                'document_file'     => $docPath,
+                'remarks'           => $request->remarks,
                 'is_deleted'        => 0
             ]);
 
-            // Update Inventory
-            $property->update(['status' => 'SOLD']);
+            // Update inventory
+            $status = ($pending <= 0) ? 'SOLD' : 'BOOKED';
+            $property->update([
+                'status'   => $status,
+                'buyer_id' => $request->customer_id
+            ]);
 
-            // Record Payment
-            if ($initialPay > 0) {
+            // Record income
+            if ($paid > 0) {
                 Transaction::create([
                     'property_id'  => $property->id,
-                    'type'         => 'CREDIT',
-                    'amount'       => $initialPay,
+                    'type'         => 'CREDIT', // Money in
+                    'amount'       => $paid,
                     'payment_date' => $request->sale_date ?? now(),
                     'payment_mode' => $request->payment_mode ?? 'CASH',
-                    'remarks'      => 'Initial Payment (Sale)'
+                    'reference_no' => $request->reference_no ?? 'TXN-' . rand(100,999),
+                    'remarks'      => 'Initial sale payment',
+                    'is_deleted'   => 0
                 ]);
             }
 
             DB::commit();
-            return response()->json(['message' => 'Sold successfully.', 'data' => $sale]);
+            return response()->json(['message' => 'Sale created successfully', 'data' => $sale]);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            // Cleanup File
             if (isset($docPath)) Storage::disk('public')->delete($docPath);
             return response()->json(['message' => $e->getMessage()], 500);
         }
     }
 
-    // Show Details
+    // Show details
     public function show($id)
     {
-        $sale = SellProperty::with(['property', 'buyer'])
+        $sale = SellProperty::with(['property', 'buyer','transactions'])
                             ->where('id', $id)
                             ->where('is_deleted', 0)
                             ->firstOrFail();
 
-        // Append File URL
+        // Append url
         if ($sale->document_file) {
             $sale->document_url = Storage::url($sale->document_file);
         }
@@ -137,12 +142,12 @@ class SellPropertyController extends Controller
         return response()->json($sale);
     }
 
-    // Update Sale
+    // Update sale
     public function update(Request $request, $id)
     {
         $sale = SellProperty::with('property')->where('id', $id)->where('is_deleted', 0)->firstOrFail();
 
-        // Validate Input
+        // Validate input
         $request->validate([
             'customer_id'    => 'required|exists:customers,id',
             'sale_rate'      => 'required|numeric|min:1',
@@ -152,32 +157,26 @@ class SellPropertyController extends Controller
 
         DB::beginTransaction();
         try {
-            // Get Quantity
-            $quantity = $sale->property->quantity;
+            $quantity = $sale->property->quantity ?? 1;
 
-            // Recalculate Totals
+            // Recalculate financials
             $baseAmount = $request->sale_rate * $quantity;
             $gstPercent = $request->gst_percentage ?? 0;
             $gstAmount  = ($baseAmount * $gstPercent) / 100;
-            
-            $otherCharges = $request->other_charges ?? 0;
-            $discount     = $request->discount ?? 0;
+            $other      = $request->other_charges ?? 0;
+            $discount   = $request->discount ?? 0;
 
-            $newTotalSaleVal = ($baseAmount + $gstAmount + $otherCharges) - $discount;
-            $newPending      = $newTotalSaleVal - $sale->received_amount;
+            $newTotal   = ($baseAmount + $gstAmount + $other) - $discount;
+            $newPending = $newTotal - $sale->received_amount;
 
-            // Handle File Update
+            // Update file
             $docPath = $sale->document_file;
             if ($request->hasFile('document')) {
-                // Delete Old
-                if ($sale->document_file) {
-                    Storage::disk('public')->delete($sale->document_file);
-                }
-                // Store New
+                if ($sale->document_file) Storage::disk('public')->delete($sale->document_file);
                 $docPath = $request->file('document')->store('sale_docs', 'public');
             }
 
-            // Update Record
+            // Update record
             $sale->update([
                 'customer_id'       => $request->customer_id,
                 'sale_date'         => $request->sale_date ?? $sale->sale_date,
@@ -186,15 +185,20 @@ class SellPropertyController extends Controller
                 'sale_base_amount'  => $baseAmount,
                 'gst_percentage'    => $gstPercent,
                 'gst_amount'        => $gstAmount,
-                'other_charges'     => $otherCharges,
+                'other_charges'     => $other,
                 'discount_amount'   => $discount,
-                'total_sale_amount' => $newTotalSaleVal,
+                'total_sale_amount' => $newTotal,
                 'pending_amount'    => $newPending,
-                'document_file'     => $docPath
+                'document_file'     => $docPath,
+                'remarks'           => $request->remarks ?? $sale->remarks
             ]);
 
+            // Update status
+            $status = ($newPending <= 0) ? 'SOLD' : 'BOOKED';
+            $sale->property()->update(['status' => $status, 'buyer_id' => $request->customer_id]);
+
             DB::commit();
-            return response()->json(['message' => 'Updated successfully.', 'data' => $sale]);
+            return response()->json(['message' => 'Sale updated successfully', 'data' => $sale]);
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -202,23 +206,29 @@ class SellPropertyController extends Controller
         }
     }
 
-    // Delete Sale
+    // Delete sale
     public function destroy($id)
     {
         DB::beginTransaction();
         try {
             $sale = SellProperty::findOrFail($id);
 
-            // Soft Delete
+            // Soft delete
             $sale->update(['is_deleted' => 1]);
 
-            // Revert Inventory
-            $sale->property()->update(['status' => 'AVAILABLE']);
+            // Revert inventory
+            $sale->property()->update([
+                'status' => 'AVAILABLE',
+                'buyer_id' => null
+            ]);
 
-            // Note: We keep file for audit (Soft Delete)
+            // Remove income
+            Transaction::where('property_id', $sale->property_id)
+                       ->where('type', 'CREDIT')
+                       ->update(['is_deleted' => 1]);
 
             DB::commit();
-            return response()->json(['message' => 'Sale cancelled.']);
+            return response()->json(['message' => 'Sale cancelled successfully']);
 
         } catch (\Exception $e) {
             DB::rollBack();
