@@ -6,7 +6,10 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\PropertyController;
-use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\PropertyDocumentController;
+use App\Http\Controllers\TransactionController;
+use App\Http\Controllers\ReportController;
+
 
 
 
@@ -69,7 +72,17 @@ Route::patch('/roles/restore/{id}', [RoleController::class, 'restore']);
     Route::put('properties/{id}',[PropertyController::class, 'update']);
     Route::delete('properties/{id}',[PropertyController::class, 'destroy']);
 
+   //Transactions
+   Route::get('/transactions', [TransactionController::class, 'index']);
+    Route::post('/transactions', [TransactionController::class, 'store']);
+    Route::get('/transactions/{id}', [TransactionController::class, 'show']);
+    Route::put('/transactions/{id}', [TransactionController::class, 'update']);
+    Route::delete('/transactions/{id}', [TransactionController::class, 'destroy']);
 
-
-
+    //Report
+    Route::get('/reports/dashboard', [ReportController::class, 'getDashboardStats']);
+    Route::get('/reports/daybook', [ReportController::class, 'getDaybook']);
+    Route::get('/reports/dues', [ReportController::class, 'getDuesReport']);
+    Route::get('/reports/sales-performance', [ReportController::class, 'getSoldPropertiesPnL']);
+    Route::get('/reports/charts/monthly', [ReportController::class, 'getMonthlyTrend']);
 });
