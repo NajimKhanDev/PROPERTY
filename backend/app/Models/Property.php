@@ -78,7 +78,11 @@ class Property extends Model
     }
 
     // --- HELPER SCOPES ---
-
+  
+    public function sell_deal()
+    {
+        return $this->hasOne(SellProperty::class, 'property_id');
+    }
     public function scopePurchases($query)
     {
         return $query->where('transaction_type', 'PURCHASE');
