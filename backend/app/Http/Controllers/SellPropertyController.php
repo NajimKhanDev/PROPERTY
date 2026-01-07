@@ -131,7 +131,7 @@ class SellPropertyController extends Controller
     public function show($id)
     {
         $sale = SellProperty::with(['property', 'buyer', 'transactions'])
-                            ->where('id', $id)
+                            ->where('property_id', $id)
                             ->where('is_deleted', 0)
                             ->firstOrFail();
 

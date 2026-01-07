@@ -27,17 +27,24 @@ class CustomerController extends Controller
     // Create customer
     public function store(Request $request)
     {
+        // Define uniqueness rules
+        // Note: We check uniqueness only against active (non-deleted) customers
+        $uniqueRule = Rule::unique('customers')->where(fn ($q) => $q->where('is_deleted', 0));
+
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'phone' => 'required|digits:10',
             'type' => 'required|in:SELLER,BUYER,BOTH',
-            'email' => [
-                'nullable', 
-                'email', 
-                Rule::unique('customers')->where(fn ($q) => $q->where('is_deleted', 0))
-            ],
+            'email' => ['nullable', 'email', $uniqueRule],
+            // Added validations for PAN & Aadhar
+            'pan_number' => ['required', 'string', 'alpha_num', $uniqueRule], 
+            'aadhar_number' => ['required', 'numeric', 'digits:12', $uniqueRule],
             'pan_file_path' => 'nullable|file|mimes:jpg,png,pdf|max:2048',
             'aadhar_file_path' => 'nullable|file|mimes:jpg,png,pdf|max:2048',
+        ], [
+            // Custom error messages
+            'pan_number.unique' => 'This PAN number is already registered.',
+            'aadhar_number.unique' => 'This Aadhar number is already registered.',
         ]);
 
         if ($validator->fails()) return response()->json(['status' => false, 'errors' => $validator->errors()], 422);
@@ -51,19 +58,21 @@ class CustomerController extends Controller
                 'type' => $request->type,
                 'pan_number' => $request->pan_number,
                 'aadhar_number' => $request->aadhar_number,
-                'created_by' => Auth::id() ?? 1, // Fallback to 1 if testing without login
+                'created_by' => Auth::id() ?? 1,
                 'is_deleted' => 0
             ]);
 
             $panPath = null;
             $aadharPath = null;
 
+            // Handle PAN upload
             if ($request->hasFile('pan_file_path')) {
                 $file = $request->file('pan_file_path');
                 $name = $customer->id . '_pan_' . time() . '.' . $file->getClientOriginalExtension();
                 $panPath = $file->storeAs('uploads/customers', $name, 'public');
             }
 
+            // Handle Aadhar upload
             if ($request->hasFile('aadhar_file_path')) {
                 $file = $request->file('aadhar_file_path');
                 $name = $customer->id . '_aadhar_' . time() . '.' . $file->getClientOriginalExtension();

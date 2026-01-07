@@ -137,38 +137,48 @@ class TransactionController extends Controller
         return response()->json(['status' => true, 'data' => $transaction]);
     }
    
-    /**
-     * SPECIAL FUNCTION: Fetch Transactions for a Specific Sale Deal
-     * URL Example: /api/transactions/sell-deal/{id}
+   /**
+     * SPECIAL FUNCTION: Get History for a Specific Sold Property
+     * Filters by 'sell_property_id' to get only INCOME (CREDIT) transactions.
      */
     public function getTransactionsBySaleId($id)
     {
-        // 1. Check if Sale Deal exists
+        // 1. Fetch the Deal details (using SellProperty Model)
         $saleDeal = SellProperty::with(['buyer:id,name,phone', 'property:id,title'])
                         ->where('id', $id)
+                        ->where('is_deleted', 0)
                         ->first();
 
         if (!$saleDeal) {
             return response()->json(['status' => false, 'message' => 'Sale Deal not found'], 404);
         }
 
-        // 2. Fetch Linked Transactions (CREDIT only)
+        // 2. Fetch Transactions linked STRICTLY to this Deal
         $transactions = Transaction::where('sell_property_id', $id)
-                            ->where('type', 'CREDIT') // Only Money In
+                            ->where('type', 'CREDIT') // Ensure we only get Money In
                             ->where('is_deleted', 0)
                             ->latest('payment_date')
                             ->get();
 
-        // 3. Return Response with Summary
+        
+
+        // 3. Return JSON with Summary + List
         return response()->json([
             'status' => true,
             'deal_summary' => [
+                'sale_id'        => $saleDeal->id,
+                'invoice_no'     => $saleDeal->invoice_no,
                 'property_title' => $saleDeal->property->title ?? 'N/A',
                 'buyer_name'     => $saleDeal->buyer->name ?? 'N/A',
-                'total_deal_val' => $saleDeal->total_sale_amount,
-                'received_total' => $saleDeal->received_amount, // Calculated from DB column
+                'buyer_phone'    => $saleDeal->buyer->phone ?? 'N/A',
+                
+                // Financials (Directly from SellProperty table columns)
+                'total_sale_val' => $saleDeal->total_sale_amount,
+                'received_total' => $saleDeal->received_amount,
                 'pending_due'    => $saleDeal->pending_amount,
-                'status'         => ($saleDeal->pending_amount <= 0) ? 'FULLY PAID' : 'PENDING'
+                
+                // Calculated Status
+                'status'         => ($saleDeal->pending_amount <= 1) ? 'FULLY PAID' : 'PENDING'
             ],
             'transactions' => $transactions
         ]);
