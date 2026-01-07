@@ -37,4 +37,14 @@ class Customer extends Model
     {
         return $this->aadhar_file_path ? url('storage/' . $this->aadhar_file_path) : null;
     }
+    public function purchases()
+    {
+        return $this->hasMany(SellProperty::class, 'customer_id');
+    }
+
+    // 2. Properties Sold by Customer (He is Vendor)
+    public function supplies()
+    {
+        return $this->hasMany(Property::class, 'seller_id');
+    }
 }

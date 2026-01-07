@@ -96,4 +96,17 @@ Route::patch('/roles/restore/{id}', [RoleController::class, 'restore']);
     Route::get('/sell-properties/{id}',[SellPropertyController::class, 'show']);
     Route::put('/sell-properties/{id}',[SellPropertyController::class, 'update']);
     Route::delete('/sell-properties/{id}',[SellPropertyController::class, 'destroy']);
+
+    // 1. List of All Customers with Summary
+Route::get('/reports/customers/all', [App\Http\Controllers\CustomerReportController::class, 'getAllCustomersReport']);
+
+// 2. Detailed Report for One Customer
+
+Route::get('/reports/customers/{id}', [App\Http\Controllers\CustomerReportController::class, 'getSpecificCustomerReport']);
+
+// 1. Master List of Properties with Profit/Status
+Route::get('/reports/properties/all', [App\Http\Controllers\PropertyReportController::class, 'getAllPropertiesReport']);
+
+// 2. Specific Property Detailed File
+Route::get('/reports/properties/{id}', [App\Http\Controllers\PropertyReportController::class, 'getSpecificPropertyReport']);
 });

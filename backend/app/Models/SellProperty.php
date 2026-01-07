@@ -31,4 +31,8 @@ class SellProperty extends Model
                     ->where('type', 'CREDIT')
                     ->orderBy('payment_date', 'desc');
     }
+    public function documents() {
+        // Documents linked via 'sell_property_id' in 'property_documents' table
+        return $this->hasMany(PropertyDocument::class, 'sell_property_id');
+    }
 }
