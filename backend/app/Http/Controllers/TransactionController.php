@@ -141,43 +141,46 @@ class TransactionController extends Controller
      * SPECIAL FUNCTION: Get History for a Specific Sold Property
      * Filters by 'sell_property_id' to get only INCOME (CREDIT) transactions.
      */
-    public function getTransactionsBySaleId($id)
+    // Input $id yahan 'property_id' hai
+    public function getTransactionsByPropertyId($id)
     {
-        // 1. Fetch the Deal details (using SellProperty Model)
+        
         $saleDeal = SellProperty::with(['buyer:id,name,phone', 'property:id,title'])
-                        ->where('id', $id)
-                        ->where('is_deleted', 0)
-                        ->first();
+                                ->where('property_id', $id) // FIX: Changed 'id' to 'property_id'
+                                ->where('is_deleted', 0)
+                                ->first();
 
         if (!$saleDeal) {
-            return response()->json(['status' => false, 'message' => 'Sale Deal not found'], 404);
+            return response()->json([
+                'status' => false, 
+                'message' => 'No active sale found for this Property ID'
+            ], 404);
         }
 
-        // 2. Fetch Transactions linked STRICTLY to this Deal
-        $transactions = Transaction::where('sell_property_id', $id)
-                            ->where('type', 'CREDIT') // Ensure we only get Money In
-                            ->where('is_deleted', 0)
-                            ->latest('payment_date')
-                            ->get();
+        // 2. Fetch Transactions linked to the FOUND SALE DEAL
+        // Ab hum $saleDeal->id use karenge (jo ki asli Sale ID hai) na ki input wala $id
+        $transactions = Transaction::where('sell_property_id', $saleDeal->id) // FIX: Use deal ID, not property ID
+                                   ->where('type', 'CREDIT') // Only Income
+                                   ->where('is_deleted', 0)
+                                   ->latest('payment_date')
+                                   ->get();
 
-        
-
-        // 3. Return JSON with Summary + List
+        // 3. Return JSON
         return response()->json([
             'status' => true,
             'deal_summary' => [
-                'sale_id'        => $saleDeal->id,
+                'sale_id'        => $saleDeal->id,        // Asli Sale ID
+                'property_id'    => $saleDeal->property_id, // Jo tumne bheja tha
                 'invoice_no'     => $saleDeal->invoice_no,
                 'property_title' => $saleDeal->property->title ?? 'N/A',
                 'buyer_name'     => $saleDeal->buyer->name ?? 'N/A',
                 'buyer_phone'    => $saleDeal->buyer->phone ?? 'N/A',
                 
-                // Financials (Directly from SellProperty table columns)
+                // Financials
                 'total_sale_val' => $saleDeal->total_sale_amount,
                 'received_total' => $saleDeal->received_amount,
                 'pending_due'    => $saleDeal->pending_amount,
                 
-                // Calculated Status
                 'status'         => ($saleDeal->pending_amount <= 1) ? 'FULLY PAID' : 'PENDING'
             ],
             'transactions' => $transactions
