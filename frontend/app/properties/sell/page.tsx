@@ -25,6 +25,8 @@ export default function SellPropertyPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const [openConfirm, setOpenConfirm] = useState(false);
+
   const [formData, setFormData] = useState({
     property_id: "",
     customer_id: "",
@@ -44,7 +46,6 @@ export default function SellPropertyPage() {
   /* ================= LOAD PROPERTIES ================= */
   useEffect(() => {
     axiosInstance.get(ProjectApi.all_properties).then((res) => {
-    // axiosInstance.get("/properties").then((res) => {
       setProperties(res.data.data || []);
     });
   }, []);
@@ -60,40 +61,25 @@ export default function SellPropertyPage() {
     });
   }, []);
 
-  /* ================= SUBMIT ================= */
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!confirm("Are you sure you want to sell this property?")) return;
-
+  /* ================= FINAL SUBMIT ================= */
+  const submitSale = async () => {
     try {
       setLoading(true);
 
       const fd = new FormData();
-      fd.append("property_id", formData.property_id);
-      fd.append("customer_id", formData.customer_id);
-      fd.append("sale_rate", formData.sale_rate);
-      fd.append("gst_percentage", formData.gst_percentage);
-      fd.append("other_charges", formData.other_charges);
-      fd.append("discount", formData.discount);
-      fd.append("paid_amount", formData.paid_amount);
-      fd.append("payment_mode", formData.payment_mode);
-      fd.append("reference_no", formData.reference_no);
-      fd.append("sale_date", formData.sale_date);
-      fd.append("invoice_no", formData.invoice_no);
-      fd.append("remarks", formData.remarks);
-
-      if (formData.document) {
-        fd.append("document", formData.document);
-      }
+      Object.entries(formData).forEach(([key, value]) => {
+        if (value !== null) fd.append(key, value as any);
+      });
 
       await axiosInstance.post(ProjectApi.sell_property, fd);
+
       router.push("/properties");
     } catch (err) {
       console.error(err);
       alert("Failed to sell property");
     } finally {
       setLoading(false);
+      setOpenConfirm(false);
     }
   };
 
@@ -114,59 +100,54 @@ export default function SellPropertyPage() {
         </h1>
 
         <form
-          onSubmit={handleSubmit}
+          onSubmit={(e) => {
+            e.preventDefault();
+            setOpenConfirm(true);
+          }}
           className="bg-white rounded-2xl shadow-md p-8 space-y-5 text-sm"
         >
           {/* Property */}
-          <div>
-            <label className="block font-medium mb-1">Property</label>
-            <select
-              required
-              className={inputClass}
-              onChange={(e) =>
-                setFormData({ ...formData, property_id: e.target.value })
-              }
-            >
-              <option value="">Select Property</option>
-              {properties.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title}
-                </option>
-              ))}
-            </select>
-          </div>
+          <select
+            required
+            className={inputClass}
+            onChange={(e) =>
+              setFormData({ ...formData, property_id: e.target.value })
+            }
+          >
+            <option value="">Select Property</option>
+            {properties.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.title}
+              </option>
+            ))}
+          </select>
 
           {/* Buyer */}
-          <div>
-            <label className="block font-medium mb-1">Buyer</label>
-            <select
-              required
-              className={inputClass}
-              onChange={(e) =>
-                setFormData({ ...formData, customer_id: e.target.value })
-              }
-            >
-              <option value="">Select Buyer</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <select
+            required
+            className={inputClass}
+            onChange={(e) =>
+              setFormData({ ...formData, customer_id: e.target.value })
+            }
+          >
+            <option value="">Select Buyer</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
 
-          {/* Sale Rate */}
           <input
             type="number"
             placeholder="Sale Amount"
             className={inputClass}
+            required
             onChange={(e) =>
               setFormData({ ...formData, sale_rate: e.target.value })
             }
-            required
           />
 
-          {/* GST */}
           <input
             type="number"
             placeholder="GST %"
@@ -176,7 +157,6 @@ export default function SellPropertyPage() {
             }
           />
 
-          {/* Other Charges */}
           <input
             type="number"
             placeholder="Other Charges"
@@ -186,7 +166,6 @@ export default function SellPropertyPage() {
             }
           />
 
-          {/* Discount */}
           <input
             type="number"
             placeholder="Discount"
@@ -196,7 +175,6 @@ export default function SellPropertyPage() {
             }
           />
 
-          {/* Paid */}
           <input
             type="number"
             placeholder="Paid Amount"
@@ -206,7 +184,6 @@ export default function SellPropertyPage() {
             }
           />
 
-          {/* Payment Mode */}
           <select
             className={inputClass}
             onChange={(e) =>
@@ -270,14 +247,49 @@ export default function SellPropertyPage() {
             </Link>
 
             <button
-              disabled={loading}
+              type="submit"
               className="px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
-              {loading ? "Saving..." : "Sell Property"}
+              Sell Property
             </button>
           </div>
         </form>
       </div>
+
+      {/* ================= CONFIRM MODAL ================= */}
+      {openConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+            <h3 className="text-lg font-semibold text-gray-800">
+              Confirm Property Sale
+            </h3>
+
+            <p className="text-sm text-gray-600 mt-2">
+              Are you sure you want to sell this property? This action cannot be
+              undone.
+            </p>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setOpenConfirm(false)}
+                className="px-4 py-2 rounded-md bg-gray-100 hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={submitSale}
+                disabled={loading}
+                className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700"
+              >
+                {loading ? "Saving..." : "Confirm Sale"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

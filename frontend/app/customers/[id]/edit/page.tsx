@@ -37,9 +37,9 @@ export default function EditCustomerPage() {
 
   /* ================= FETCH CUSTOMER ================= */
   useEffect(() => {
-    if (customerId) {
-      fetchCustomer();
-    }
+    if (!customerId) return;
+    fetchCustomer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId]);
 
   const fetchCustomer = async () => {
@@ -49,14 +49,13 @@ export default function EditCustomerPage() {
       );
 
       const data = res.data?.data;
-
       if (!data) return;
 
-      setValue("name", data.name);
-      setValue("email", data.email);
-      setValue("phone", data.phone);
-      setValue("address", data.address);
-      setValue("type", data.type.toLowerCase());
+      setValue("name", data.name || "");
+      setValue("email", data.email || "");
+      setValue("phone", data.phone || "");
+      setValue("address", data.address || "");
+      setValue("type", data.type?.toLowerCase() || "buyer");
       setValue("pan_number", data.pan_number || "");
       setValue("aadhar_number", data.aadhar_number || "");
     } catch (error) {
@@ -69,7 +68,9 @@ export default function EditCustomerPage() {
     try {
       const formData = new FormData();
 
+      // Laravel PUT spoofing
       formData.append("_method", "PUT");
+
       formData.append("name", values.name);
       formData.append("email", values.email);
       formData.append("phone", values.phone);
@@ -88,7 +89,12 @@ export default function EditCustomerPage() {
 
       await axiosInstance.post(
         `${ProjectApi.all_customers}/${customerId}`,
-        formData
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
       );
 
       router.push(`/customers/${customerId}`);
@@ -107,12 +113,13 @@ export default function EditCustomerPage() {
       <div className="w-full max-w-2xl">
         {/* HEADER */}
         <div className="mb-6">
-          <Link
-            href={`/customers/${customerId}`}
+          <button
+            type="button"
+            onClick={() => router.back()}
             className="text-sm text-blue-600 hover:text-blue-800"
           >
-            ← Back to Customer
-          </Link>
+            ← Back
+          </button>
           <h1 className="text-2xl font-bold text-gray-800 mt-2 text-center">
             Edit Customer
           </h1>
@@ -120,15 +127,14 @@ export default function EditCustomerPage() {
 
         {/* FORM */}
         <div className="bg-white rounded-2xl shadow-md p-8">
-          <form
-            onSubmit={handleSubmit(onSubmit)}
-            className="space-y-5 text-sm"
-          >
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 text-sm">
+            {/* Name */}
             <div>
               <label className="block font-medium mb-1">Name</label>
               <input {...register("name", { required: true })} className={inputClass} />
             </div>
 
+            {/* Email */}
             <div>
               <label className="block font-medium mb-1">Email</label>
               <input
@@ -138,16 +144,23 @@ export default function EditCustomerPage() {
               />
             </div>
 
+            {/* Phone */}
             <div>
               <label className="block font-medium mb-1">Phone</label>
               <input {...register("phone", { required: true })} className={inputClass} />
             </div>
 
+            {/* Address */}
             <div>
               <label className="block font-medium mb-1">Address</label>
-              <textarea rows={3} {...register("address")} className={inputClass} />
+              <textarea
+                rows={3}
+                {...register("address")}
+                className={inputClass}
+              />
             </div>
 
+            {/* Type */}
             <div>
               <label className="block font-medium mb-1">Customer Type</label>
               <select {...register("type")} className={inputClass}>
@@ -157,26 +170,33 @@ export default function EditCustomerPage() {
               </select>
             </div>
 
+            {/* PAN */}
             <div>
               <label className="block font-medium mb-1">PAN Number</label>
               <input {...register("pan_number")} className={inputClass} />
             </div>
 
             <div>
-              <label className="block font-medium mb-1">PAN File (optional)</label>
+              <label className="block font-medium mb-1">
+                PAN File (optional)
+              </label>
               <input type="file" {...register("pan_file")} />
             </div>
 
+            {/* Aadhaar */}
             <div>
               <label className="block font-medium mb-1">Aadhaar Number</label>
               <input {...register("aadhar_number")} className={inputClass} />
             </div>
 
             <div>
-              <label className="block font-medium mb-1">Aadhaar File (optional)</label>
+              <label className="block font-medium mb-1">
+                Aadhaar File (optional)
+              </label>
               <input type="file" {...register("aadhar_file")} />
             </div>
 
+            {/* Actions */}
             <div className="flex gap-4 pt-4 justify-end">
               <Link
                 href={`/customers/${customerId}`}

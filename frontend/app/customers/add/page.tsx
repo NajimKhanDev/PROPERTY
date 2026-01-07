@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ProjectApi from "@/app/api/ProjectApis";
+import axiosInstance from "@/app/api/axiosInstance";
 
 type FormValues = {
   name: string;
@@ -31,38 +32,42 @@ export default function AddCustomerPage() {
   });
 
   const onSubmit = async (values: FormValues) => {
-    try {
-      const formData = new FormData();
+  try {
+    const formData = new FormData();
 
-      formData.append("name", values.name);
-      formData.append("email", values.email);
-      formData.append("phone", values.phone);
-      formData.append("address", values.address);
-      formData.append("type", values.type.toUpperCase());
-      formData.append("pan_number", values.pan_number);
-      formData.append("aadhar_number", values.aadhar_number);
+    formData.append("name", values.name);
+    formData.append("email", values.email);
+    formData.append("phone", values.phone);
+    formData.append("address", values.address);
+    formData.append("type", values.type.toUpperCase());
+    formData.append("pan_number", values.pan_number);
+    formData.append("aadhar_number", values.aadhar_number);
 
-      if (values.pan_file?.[0]) {
-        formData.append("pan_file_path", values.pan_file[0]);
-      }
-
-      if (values.aadhar_file?.[0]) {
-        formData.append("aadhar_file_path", values.aadhar_file[0]);
-      }
-
-      const res = await fetch(ProjectApi.create_customers, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) throw new Error("Failed to add customer");
-
-      router.push("/customers");
-    } catch (error) {
-      console.error(error);
-      alert("Failed to add customer");
+    if (values.pan_file?.[0]) {
+      formData.append("pan_file_path", values.pan_file[0]);
     }
-  };
+
+    if (values.aadhar_file?.[0]) {
+      formData.append("aadhar_file_path", values.aadhar_file[0]);
+    }
+
+    const res = await axiosInstance.post(
+      ProjectApi.create_customers,
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
+
+    router.push("/customers");
+  } catch (error) {
+    console.error(error);
+    alert("Failed to add customer");
+  }
+};
+
 
   const inputClass =
     "w-full px-3 py-2 rounded-md border border-gray-300 " +
