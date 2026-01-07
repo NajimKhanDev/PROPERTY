@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import axiosInstance from "@/app/api/axiosInstance";
+import ProjectApi from "@/app/api/ProjectApis";
 
 interface Customer {
   id: number;
@@ -11,30 +12,46 @@ interface Customer {
   type: "BUYER" | "SELLER" | "BOTH";
 }
 
+interface Property {
+  id: number;
+  title: string;
+  status: string;
+}
+
 export default function SellPropertyPage() {
   const router = useRouter();
 
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState({
+    property_id: "",
     customer_id: "",
-    title: "",
-    category: "FLAT",
-    rate: "",
+    sale_rate: "",
     gst_percentage: "",
-    other_expenses: "",
+    other_charges: "",
+    discount: "",
     paid_amount: "",
     payment_mode: "ONLINE",
-    payment_date: "",
+    reference_no: "",
+    sale_date: "",
     invoice_no: "",
-    date: "",
-    documents: [] as File[],
+    remarks: "",
+    document: null as File | null,
   });
+
+  /* ================= LOAD PROPERTIES ================= */
+  useEffect(() => {
+    axiosInstance.get(ProjectApi.all_properties).then((res) => {
+    // axiosInstance.get("/properties").then((res) => {
+      setProperties(res.data.data || []);
+    });
+  }, []);
 
   /* ================= LOAD BUYERS ================= */
   useEffect(() => {
-    axiosInstance.get("/api/customers").then((res) => {
+    axiosInstance.get(ProjectApi.all_customers).then((res) => {
       setCustomers(
         res.data.data.data.filter(
           (c: Customer) => c.type === "BUYER" || c.type === "BOTH"
@@ -47,30 +64,30 @@ export default function SellPropertyPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!confirm("Are you sure you want to sell this property?")) return;
+
     try {
       setLoading(true);
 
       const fd = new FormData();
-      fd.append("transaction_type", "SELL");
+      fd.append("property_id", formData.property_id);
       fd.append("customer_id", formData.customer_id);
-      fd.append("title", formData.title);
-      fd.append("category", formData.category);
-      fd.append("quantity", "1");
-      fd.append("rate", formData.rate);
+      fd.append("sale_rate", formData.sale_rate);
       fd.append("gst_percentage", formData.gst_percentage);
-      fd.append("other_expenses", formData.other_expenses);
+      fd.append("other_charges", formData.other_charges);
+      fd.append("discount", formData.discount);
       fd.append("paid_amount", formData.paid_amount);
       fd.append("payment_mode", formData.payment_mode);
-      fd.append("payment_date", formData.payment_date);
+      fd.append("reference_no", formData.reference_no);
+      fd.append("sale_date", formData.sale_date);
       fd.append("invoice_no", formData.invoice_no);
-      fd.append("date", formData.date);
+      fd.append("remarks", formData.remarks);
 
-      formData.documents.forEach((file) => {
-        fd.append("documents[]", file);
-      });
+      if (formData.document) {
+        fd.append("document", formData.document);
+      }
 
-      await axiosInstance.post("/api/properties", fd);
-
+      await axiosInstance.post(ProjectApi.sell_property, fd);
       router.push("/properties");
     } catch (err) {
       console.error(err);
@@ -80,131 +97,118 @@ export default function SellPropertyPage() {
     }
   };
 
+  /* ================= INPUT STYLE ================= */
+  const inputClass =
+    "w-full px-3 py-2 rounded-md border border-gray-300 " +
+    "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500";
+
   return (
-    <div className="p-6 text-black">
-      {/* HEADER */}
-      <Link
-        href="/properties"
-        className="text-sm text-blue-600 hover:text-blue-800"
-      >
-        ← Back to Properties
-      </Link>
+    <div className="min-h-screen bg-gray-50 px-4 pt-10 text-black">
+      <div className="max-w-2xl mx-auto">
+        <Link href="/properties" className="text-sm text-blue-600">
+          ← Back to Properties
+        </Link>
 
-      <h1 className="text-2xl font-bold text-gray-800 mt-2 mb-6">
-        Sell Property
-      </h1>
+        <h1 className="text-2xl font-bold text-gray-800 mt-2 mb-6 text-center">
+          Sell Property
+        </h1>
 
-      {/* FORM */}
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white rounded-xl shadow-sm p-6 max-w-2xl space-y-4 text-sm"
-      >
-        {/* Buyer */}
-        <div>
-          <label className="block font-medium mb-1">Buyer</label>
-          <select
-            required
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
-            value={formData.customer_id}
-            onChange={(e) =>
-              setFormData({ ...formData, customer_id: e.target.value })
-            }
-          >
-            <option value="">Select Buyer</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Title */}
-        <div>
-          <label className="block font-medium mb-1">Property Title</label>
-          <input
-            required
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
-            onChange={(e) =>
-              setFormData({ ...formData, title: e.target.value })
-            }
-          />
-        </div>
-
-        {/* Category */}
-        <div>
-          <label className="block font-medium mb-1">Property Category</label>
-          <select
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
-            value={formData.category}
-            onChange={(e) =>
-              setFormData({ ...formData, category: e.target.value })
-            }
-          >
-            {["FLAT", "HOUSE", "LAND", "COMMERCIAL", "AGRICULTURE"].map(
-              (c) => (
-                <option key={c} value={c}>
-                  {c}
+        <form
+          onSubmit={handleSubmit}
+          className="bg-white rounded-2xl shadow-md p-8 space-y-5 text-sm"
+        >
+          {/* Property */}
+          <div>
+            <label className="block font-medium mb-1">Property</label>
+            <select
+              required
+              className={inputClass}
+              onChange={(e) =>
+                setFormData({ ...formData, property_id: e.target.value })
+              }
+            >
+              <option value="">Select Property</option>
+              {properties.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}
                 </option>
-              )
-            )}
-          </select>
-        </div>
+              ))}
+            </select>
+          </div>
 
-        {/* Rate */}
-        <div>
-          <label className="block font-medium mb-1">Selling Price</label>
+          {/* Buyer */}
+          <div>
+            <label className="block font-medium mb-1">Buyer</label>
+            <select
+              required
+              className={inputClass}
+              onChange={(e) =>
+                setFormData({ ...formData, customer_id: e.target.value })
+              }
+            >
+              <option value="">Select Buyer</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Sale Rate */}
           <input
             type="number"
-            required
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            placeholder="Sale Amount"
+            className={inputClass}
             onChange={(e) =>
-              setFormData({ ...formData, rate: e.target.value })
+              setFormData({ ...formData, sale_rate: e.target.value })
             }
+            required
           />
-        </div>
 
-        {/* GST */}
-        <div>
-          <label className="block font-medium mb-1">GST (%)</label>
+          {/* GST */}
           <input
             type="number"
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            placeholder="GST %"
+            className={inputClass}
             onChange={(e) =>
               setFormData({ ...formData, gst_percentage: e.target.value })
             }
           />
-        </div>
 
-        {/* Other Expenses */}
-        <div>
-          <label className="block font-medium mb-1">Other Expenses</label>
+          {/* Other Charges */}
           <input
             type="number"
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            placeholder="Other Charges"
+            className={inputClass}
             onChange={(e) =>
-              setFormData({ ...formData, other_expenses: e.target.value })
+              setFormData({ ...formData, other_charges: e.target.value })
             }
           />
-        </div>
 
-        {/* Paid Amount */}
-        <div>
-          <label className="block font-medium mb-1">Paid Amount</label>
+          {/* Discount */}
           <input
             type="number"
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            placeholder="Discount"
+            className={inputClass}
+            onChange={(e) =>
+              setFormData({ ...formData, discount: e.target.value })
+            }
+          />
+
+          {/* Paid */}
+          <input
+            type="number"
+            placeholder="Paid Amount"
+            className={inputClass}
             onChange={(e) =>
               setFormData({ ...formData, paid_amount: e.target.value })
             }
           />
-        </div>
 
-        {/* Payment Mode */}
-        <div>
-          <label className="block font-medium mb-1">Payment Mode</label>
+          {/* Payment Mode */}
           <select
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            className={inputClass}
             onChange={(e) =>
               setFormData({ ...formData, payment_mode: e.target.value })
             }
@@ -213,75 +217,67 @@ export default function SellPropertyPage() {
               <option key={m}>{m}</option>
             ))}
           </select>
-        </div>
 
-        {/* Payment Date */}
-        <div>
-          <label className="block font-medium mb-1">Payment Date</label>
           <input
-            type="date"
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            placeholder="Reference No"
+            className={inputClass}
             onChange={(e) =>
-              setFormData({ ...formData, payment_date: e.target.value })
+              setFormData({ ...formData, reference_no: e.target.value })
             }
           />
-        </div>
 
-        {/* Invoice */}
-        <div>
-          <label className="block font-medium mb-1">Invoice No</label>
           <input
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            type="date"
+            className={inputClass}
+            onChange={(e) =>
+              setFormData({ ...formData, sale_date: e.target.value })
+            }
+          />
+
+          <input
+            placeholder="Invoice No"
+            className={inputClass}
             onChange={(e) =>
               setFormData({ ...formData, invoice_no: e.target.value })
             }
           />
-        </div>
 
-        {/* Date */}
-        <div>
-          <label className="block font-medium mb-1">Transaction Date</label>
-          <input
-            type="date"
-            className="w-full border border-gray-300 rounded-md px-3 py-2"
+          <textarea
+            placeholder="Remarks"
+            rows={3}
+            className={inputClass}
             onChange={(e) =>
-              setFormData({ ...formData, date: e.target.value })
+              setFormData({ ...formData, remarks: e.target.value })
             }
           />
-        </div>
 
-        {/* Documents */}
-        <div>
-          <label className="block font-medium mb-1">Documents</label>
           <input
             type="file"
-            multiple
             onChange={(e) =>
               setFormData({
                 ...formData,
-                documents: Array.from(e.target.files || []),
+                document: e.target.files?.[0] || null,
               })
             }
           />
-        </div>
 
-        {/* Actions */}
-        <div className="flex gap-4 pt-4">
-          <button
-            disabled={loading}
-            className="px-4 py-2 bg-[#0070BB] text-white rounded-md hover:bg-[#005A99]"
-          >
-            {loading ? "Saving..." : "Sell Property"}
-          </button>
+          <div className="flex justify-end gap-3 pt-4">
+            <Link
+              href="/properties"
+              className="px-4 py-2 bg-gray-200 rounded-md"
+            >
+              Cancel
+            </Link>
 
-          <Link
-            href="/properties"
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-          >
-            Cancel
-          </Link>
-        </div>
-      </form>
+            <button
+              disabled={loading}
+              className="px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              {loading ? "Saving..." : "Sell Property"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

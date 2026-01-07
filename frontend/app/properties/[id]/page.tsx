@@ -66,37 +66,79 @@ export default function PropertyViewPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ================= PROPERTY INFO ================= */}
         <div className="lg:col-span-2 bg-white rounded-xl shadow-sm p-6 space-y-4 text-sm">
-          <div className="flex justify-between">
+          <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold">Property Information</h2>
-            <Link
+
+            {/* <Link
               href={`/properties/${propertyId}/edit`}
               className="px-3 py-1.5 bg-[#0070BB] text-white rounded-md text-sm"
             >
-              Edit Property
-            </Link>
+              Edit
+            </Link> */}
           </div>
 
-          {[
-            ["Title", property.title],
-            ["Transaction Type", property.transaction_type],
-            ["Category", property.category],
-            ["Address", property.address],
-            [
-              property.transaction_type === "PURCHASE" ? "Seller" : "Buyer",
-              property.seller?.name || property.buyer?.name || "—",
-            ],
-          ].map(([label, value]) => (
-            <div key={label}>
-              <p className="text-gray-500">{label}</p>
-              <p className="font-medium">{value}</p>
-            </div>
-          ))}
+          {/* BASIC DETAILS */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Info label="Title" value={property.title} />
+            <Info label="Transaction Type" value={property.transaction_type} />
+            <Info label="Category" value={property.category} />
+            <Info label="Status" value={property.status} />
+            <Info label="Address" value={property.address} />
+            <Info label="Invoice No" value={property.invoice_no} />
+          </div>
 
-          <div>
-            <p className="text-gray-500">Total Amount</p>
-            <p className="text-xl font-bold text-green-600">
-              ₹{Number(property.total_amount).toLocaleString("en-IN")}
-            </p>
+          {/* PARTY DETAILS */}
+          <div className="pt-3 border-t">
+            <h3 className="font-semibold mb-2">Party Details</h3>
+
+            {property.seller && (
+              <Info
+                label="Seller"
+                value={`${property.seller.name} (${property.seller.phone})`}
+              />
+            )}
+
+            {property.buyer && (
+              <Info
+                label="Buyer"
+                value={`${property.buyer.name} (${property.buyer.phone})`}
+              />
+            )}
+          </div>
+
+          {/* AMOUNT DETAILS */}
+          <div className="pt-3 border-t">
+            <h3 className="font-semibold mb-2">Amount Breakdown</h3>
+
+            <div className="grid grid-cols-2 gap-4">
+              <Info
+                label="Rate"
+                value={`₹${Number(property.rate).toLocaleString("en-IN")}`}
+              />
+              <Info
+                label="Base Amount"
+                value={`₹${Number(property.base_amount).toLocaleString("en-IN")}`}
+              />
+              <Info
+                label="GST"
+                value={`${property.gst_percentage}% (₹${Number(
+                  property.gst_amount
+                ).toLocaleString("en-IN")})`}
+              />
+              <Info
+                label="Other Expenses"
+                value={`₹${Number(
+                  property.other_expenses
+                ).toLocaleString("en-IN")}`}
+              />
+            </div>
+
+            <div className="mt-4">
+              <p className="text-gray-500">Total Amount</p>
+              <p className="text-xl font-bold text-green-600">
+                ₹{Number(property.total_amount).toLocaleString("en-IN")}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -111,11 +153,14 @@ export default function PropertyViewPage() {
             </span>
           </p>
 
-          <p className="text-red-600 font-medium">
+          <p className="font-medium text-red-600">
             Due Amount: ₹{Number(property.due_amount).toLocaleString("en-IN")}
           </p>
 
-          <p>Status: {property.status}</p>
+          <p>
+            Transaction Date:{" "}
+            {new Date(property.date).toLocaleDateString("en-IN")}
+          </p>
         </div>
       </div>
 
@@ -125,7 +170,10 @@ export default function PropertyViewPage() {
           <h3 className="font-semibold mb-3">Documents</h3>
           <ul className="space-y-2 text-sm">
             {property.documents.map((doc: any) => (
-              <li key={doc.id} className="flex justify-between items-center">
+              <li
+                key={doc.id}
+                className="flex justify-between items-center"
+              >
                 <span>{doc.doc_name}</span>
                 <a
                   href={`${process.env.NEXT_PUBLIC_API_URL}/${doc.doc_file}`}
@@ -142,3 +190,11 @@ export default function PropertyViewPage() {
     </div>
   );
 }
+
+/* ================= REUSABLE INFO ================= */
+const Info = ({ label, value }: { label: string; value: any }) => (
+  <div>
+    <p className="text-gray-500">{label}</p>
+    <p className="font-medium">{value || "—"}</p>
+  </div>
+);
