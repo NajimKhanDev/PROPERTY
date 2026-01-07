@@ -88,9 +88,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     //Sell Property
     // Route::apiResource('sell-properties', SellPropertyController::class);
-    Route::get('/sell-properties',[PropertyController::class, 'index']);
-    Route::post('/sell-properties',[PropertyController::class, 'store']);
-    Route::get('/sell-properties/{id}',[PropertyController::class, 'show']);
-    Route::put('/sell-properties/{id}',[PropertyController::class, 'update']);
-    Route::delete('/sell-properties/{id}',[PropertyController::class, 'destroy']);
+    Route::get('/sell-properties',[SellPropertyController::class, 'index']);
+    Route::post('/sell-properties',[SellPropertyController::class, 'store']);
+    Route::get('/sell-properties/{id}',[SellPropertyController::class, 'show']);
+    Route::put('/sell-properties/{id}',[SellPropertyController::class, 'update']);
+    Route::delete('/sell-properties/{id}',[SellPropertyController::class, 'destroy']);
 });
