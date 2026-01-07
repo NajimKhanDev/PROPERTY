@@ -28,7 +28,7 @@ export default function PropertiesPage() {
 
       const url =
         activeTab === "PURCHASE"
-          ? `${ProjectApi.all_properties}?page=${page}`
+          ? `${ProjectApi.all_properties}?page=${page}&transaction_type=PURCHASE`
           : `${ProjectApi.sell_property}?page=${page}`;
 
       const res = await axiosInstance.get(url);
@@ -54,7 +54,7 @@ export default function PropertiesPage() {
         {activeTab === "PURCHASE" && (
           <Link
             href="/properties/buy"
-            className="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700"
+            className="px-4 py-2 bg-green-600 text-white rounded-md text-sm"
           >
             Buy Property
           </Link>
@@ -63,14 +63,14 @@ export default function PropertiesPage() {
         {activeTab === "SELL" && (
           <Link
             href="/properties/sell"
-            className="px-4 py-2 bg-[#0070BB] text-white rounded-md text-sm hover:bg-[#005A99]"
+            className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm"
           >
             Sell Property
           </Link>
         )}
       </div>
 
-      {/* ================= TABS ================= */}
+      {/* TABS */}
       <div className="flex gap-2 mb-4">
         {[
           { label: "Purchased Properties", value: "PURCHASE" },
@@ -85,7 +85,7 @@ export default function PropertiesPage() {
             className={`px-4 py-2 rounded-md text-sm font-medium ${
               activeTab === t.value
                 ? "bg-blue-600 text-white"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                : "bg-gray-200 text-gray-700"
             }`}
           >
             {t.label}
@@ -93,10 +93,10 @@ export default function PropertiesPage() {
         ))}
       </div>
 
-      {/* ================= TABLE ================= */}
+      {/* TABLE */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-700">
+          <thead className="bg-gray-50">
             <tr>
               {[
                 "S.No",
@@ -107,10 +107,7 @@ export default function PropertiesPage() {
                 "Status",
                 "Actions",
               ].map((h) => (
-                <th
-                  key={h}
-                  className="px-4 py-3 text-left font-semibold border-b"
-                >
+                <th key={h} className="px-4 py-3 text-left border-b">
                   {h}
                 </th>
               ))}
@@ -120,7 +117,7 @@ export default function PropertiesPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={7} className="text-center py-6 text-gray-500">
+                <td colSpan={7} className="text-center py-6">
                   Loading...
                 </td>
               </tr>
@@ -128,75 +125,88 @@ export default function PropertiesPage() {
 
             {!loading && list.length === 0 && (
               <tr>
-                <td colSpan={7} className="text-center py-6 text-gray-500">
+                <td colSpan={7} className="text-center py-6">
                   No records found
                 </td>
               </tr>
             )}
 
             {!loading &&
-              list.map((row, idx) => (
-                <tr key={row.id} className="hover:bg-blue-50">
-                  <td className="px-4 py-3">
-                    {(page - 1) * 10 + idx + 1}
-                  </td>
+              list.map((row, idx) => {
+                const title =
+                  activeTab === "SELL"
+                    ? row.property?.title
+                    : row.title;
 
-                  <td className="px-4 py-3 font-medium">
-                    {row.title}
-                  </td>
+                const category =
+                  activeTab === "SELL"
+                    ? row.property?.category
+                    : row.category;
 
-                  <td className="px-4 py-3">
-                    {row.category}
-                  </td>
+                const party =
+                  activeTab === "SELL"
+                    ? row.buyer?.name
+                    : row.seller?.name;
 
-                  <td className="px-4 py-3">
-                    {activeTab === "SELL"
-                      ? row.buyer?.name || "—"
-                      : row.seller?.name || "—"}
-                  </td>
+                const amount =
+                  activeTab === "SELL"
+                    ? row.total_sale_amount
+                    : row.total_amount;
 
-                  <td className="px-4 py-3">
-                    ₹
-                    {Number(
-                      activeTab === "SELL"
-                        ? row.total_amount
-                        : row.total_amount
-                    ).toLocaleString("en-IN")}
-                  </td>
+                const status =
+                  activeTab === "SELL"
+                    ? row.property?.status
+                    : row.status;
 
-                  <td className="px-4 py-3">
-                    <span
-                      className={`px-2 py-0.5 text-xs rounded-full ${
-                        row.status === "BOOKED"
-                          ? "bg-green-100 text-green-700"
-                          : row.status === "AVAILABLE"
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-gray-100 text-gray-700"
-                      }`}
-                    >
-                      {row.status}
-                    </span>
-                  </td>
+                return (
+                  <tr key={row.id} className="hover:bg-blue-50">
+                    <td className="px-4 py-3">
+                      {(page - 1) * 10 + idx + 1}
+                    </td>
 
-                  <td className="px-4 py-3">
-                    <Link
-                      href={
-                        activeTab === "SELL"
-                          ? `/properties/sellview?id=${row.id}`
-                          : `/properties/view?id=${row.id}`
-                      }
-                      className="text-blue-600 hover:underline"
-                    >
-                      View
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+                    <td className="px-4 py-3 font-medium">
+                      {title}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {category}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {party || "—"}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      ₹
+                      {Number(amount || 0).toLocaleString("en-IN")}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">
+                        {status}
+                      </span>
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <Link
+                        href={
+                          activeTab === "SELL"
+                            ? `/properties/sellview?id=${row.id}`
+                            : `/properties/view?id=${row.id}`
+                        }
+                        className="text-blue-600 hover:underline"
+                      >
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
           </tbody>
         </table>
       </div>
 
-      {/* ================= PAGINATION ================= */}
+      {/* PAGINATION */}
       <div className="flex justify-end items-center gap-3 mt-4">
         <button
           disabled={page === 1}

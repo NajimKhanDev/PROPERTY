@@ -16,7 +16,7 @@ interface Property {
   id: number;
   title: string;
   category: string;
-  owner_id: number; // seller id
+  owner_id: number;
 }
 
 export default function SellPropertyPage() {
@@ -32,10 +32,10 @@ export default function SellPropertyPage() {
 
   const [formData, setFormData] = useState({
     property_id: "",
-    buyer_id: "",
-    rate: "",
+    customer_id: "",
+    sale_rate: "",
+    gst_percentage: "",
     paid_amount: "",
-    invoice_no: "",
     document: null as File | null,
   });
 
@@ -69,18 +69,19 @@ export default function SellPropertyPage() {
 
       const fd = new FormData();
 
-      fd.append("transaction_type", "SELL");
-      // fd.append("seller_id", String(selectedProperty.owner_id));
-      fd.append("buyer_id", formData.buyer_id);
+      // ✅ REQUIRED
+      fd.append("property_id", formData.property_id);
+      fd.append("customer_id", formData.customer_id);
+      fd.append("sale_rate", formData.sale_rate);
 
-      fd.append("title", selectedProperty.title);
-      fd.append("category", selectedProperty.category);
+      // ✅ OPTIONAL
+      if (formData.gst_percentage) {
+        fd.append("gst_percentage", formData.gst_percentage);
+      }
 
-      fd.append("quantity", "1");
-      fd.append("rate", formData.rate);
-
-      fd.append("invoice_no", formData.invoice_no);
-      fd.append("paid_amount", formData.paid_amount);
+      if (formData.paid_amount) {
+        fd.append("paid_amount", formData.paid_amount);
+      }
 
       if (formData.document) {
         fd.append("document", formData.document);
@@ -124,6 +125,7 @@ export default function SellPropertyPage() {
           <select
             required
             className={inputClass}
+            value={formData.property_id}
             onChange={(e) => {
               const prop = properties.find(
                 (p) => p.id === Number(e.target.value)
@@ -144,8 +146,9 @@ export default function SellPropertyPage() {
           <select
             required
             className={inputClass}
+            value={formData.customer_id}
             onChange={(e) =>
-              setFormData({ ...formData, buyer_id: e.target.value })
+              setFormData({ ...formData, customer_id: e.target.value })
             }
           >
             <option value="">Select Buyer</option>
@@ -156,37 +159,44 @@ export default function SellPropertyPage() {
             ))}
           </select>
 
+          {/* SALE RATE */}
           <input
             type="number"
             required
             placeholder="Sale Rate"
             className={inputClass}
+            value={formData.sale_rate}
             onChange={(e) =>
-              setFormData({ ...formData, rate: e.target.value })
+              setFormData({ ...formData, sale_rate: e.target.value })
             }
           />
 
+          {/* GST */}
           <input
             type="number"
-            required
-            placeholder="Paid Amount"
+            placeholder="GST Percentage (optional)"
             className={inputClass}
+            value={formData.gst_percentage}
+            onChange={(e) =>
+              setFormData({ ...formData, gst_percentage: e.target.value })
+            }
+          />
+
+          {/* PAID AMOUNT */}
+          <input
+            type="number"
+            placeholder="Paid Amount (optional)"
+            className={inputClass}
+            value={formData.paid_amount}
             onChange={(e) =>
               setFormData({ ...formData, paid_amount: e.target.value })
             }
           />
 
-          <input
-            required
-            placeholder="Invoice No"
-            className={inputClass}
-            onChange={(e) =>
-              setFormData({ ...formData, invoice_no: e.target.value })
-            }
-          />
-
+          {/* DOCUMENT */}
           <input
             type="file"
+            accept=".pdf,.jpg,.png"
             onChange={(e) =>
               setFormData({
                 ...formData,
@@ -219,9 +229,7 @@ export default function SellPropertyPage() {
           <div className="absolute inset-0 bg-black/40" />
 
           <div className="relative bg-white p-6 rounded-xl shadow w-full max-w-sm">
-            <h3 className="text-lg font-semibold">
-              Confirm Property Sale
-            </h3>
+            <h3 className="text-lg font-semibold">Confirm Property Sale</h3>
 
             <p className="text-sm text-gray-600 mt-2">
               Are you sure you want to sell this property?
