@@ -178,14 +178,14 @@ export default function CustomersPage() {
 
                     <td className="px-4 py-3 border-b border-gray-100 flex gap-3">
                       <Link
-                        href={`/customers/${c.id}`}
+                        href={`/customers/view?id=${c.id}`}
                         className="text-blue-600 hover:text-blue-800"
                       >
                         View
                       </Link>
 
                       <Link
-                        href={`/customers/${c.id}/edit`}
+                        href={`/customers/edit?id=${c.id}`}
                         className="text-green-600 hover:text-green-800"
                       >
                         Edit

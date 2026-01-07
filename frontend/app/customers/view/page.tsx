@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import axiosInstance from "@/app/api/axiosInstance";
 import ProjectApi from "@/app/api/ProjectApis";
@@ -17,8 +17,8 @@ interface Customer {
 }
 
 export default function CustomerViewPage() {
-  const params = useParams();
-  const customerId = params.id as string;
+  const searchParams = useSearchParams();
+  const customerId = searchParams.get("id");
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +93,7 @@ export default function CustomerViewPage() {
               </h2>
 
               <Link
-                href={`/customers/${customer.id}/edit`}
+                href={`/customers/edit?id=${customer.id}`}
                 className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
               >
                 Edit Customer
@@ -182,7 +182,7 @@ export default function CustomerViewPage() {
             </h3>
             <div className="space-y-2">
               <Link
-                href={`/customers/${customer.id}/edit`}
+                href={`/customers/edit?id=${customer.id}`}
                 className="block w-full text-center bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
               >
                 Edit Customer

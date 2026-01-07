@@ -177,8 +177,8 @@ export default function PropertiesPage() {
                     <Link
                       href={
                         activeTab === "SELL"
-                          ? `/properties/${row.property_id}`
-                          : `/properties/${row.id}`
+                          ? `/properties/sellview?id=${row.property_id}`
+                          : `/properties/view?id=${row.id}`
                       }
                       className="text-blue-600 hover:underline"
                     >

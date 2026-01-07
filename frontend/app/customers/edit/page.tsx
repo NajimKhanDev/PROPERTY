@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { useParams, useRouter } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import axiosInstance from "@/app/api/axiosInstance";
 import ProjectApi from "@/app/api/ProjectApis";
@@ -20,9 +20,9 @@ type FormValues = {
 };
 
 export default function EditCustomerPage() {
-  const params = useParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const customerId = params.id as string;
+  const customerId = searchParams.get("id");
 
   const {
     register,
@@ -97,7 +97,7 @@ export default function EditCustomerPage() {
         }
       );
 
-      router.push(`/customers/${customerId}`);
+      router.push(`/customers/view?id=${customerId}`);
     } catch (error) {
       console.error("Failed to update customer", error);
       alert("Failed to update customer");
@@ -199,7 +199,7 @@ export default function EditCustomerPage() {
             {/* Actions */}
             <div className="flex gap-4 pt-4 justify-end">
               <Link
-                href={`/customers/${customerId}`}
+                href={`/customers/view?id=${customerId}`}
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-300"
               >
                 Cancel
