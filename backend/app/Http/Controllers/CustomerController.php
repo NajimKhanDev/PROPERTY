@@ -25,10 +25,8 @@ class CustomerController extends Controller
     }
 
     // Create customer
-    public function store(Request $request)
+   public function store(Request $request)
     {
-        // Define uniqueness rules
-        // Note: We check uniqueness only against active (non-deleted) customers
         $uniqueRule = Rule::unique('customers')->where(fn ($q) => $q->where('is_deleted', 0));
 
         $validator = Validator::make($request->all(), [
@@ -36,15 +34,33 @@ class CustomerController extends Controller
             'phone' => 'required|digits:10',
             'type' => 'required|in:SELLER,BUYER,BOTH',
             'email' => ['nullable', 'email', $uniqueRule],
-            // Added validations for PAN & Aadhar
-            'pan_number' => ['required', 'string', 'alpha_num', $uniqueRule], 
-            'aadhar_number' => ['required', 'numeric', 'digits:12', $uniqueRule],
+            
+            // FIX: Added 'different:aadhar_number' here
+            'pan_number' => [
+                'required', 
+                'string', 
+                'alpha_num', 
+                'different:aadhar_number', // PAN aur Aadhar same nahi ho sakte
+                $uniqueRule
+            ], 
+            
+            // FIX: Added 'different:pan_number' here
+            'aadhar_number' => [
+                'required', 
+                'numeric', 
+                'digits:12', 
+                'different:pan_number', // Aadhar aur PAN same nahi ho sakte
+                $uniqueRule
+            ],
+            
             'pan_file_path' => 'nullable|file|mimes:jpg,png,pdf|max:2048',
             'aadhar_file_path' => 'nullable|file|mimes:jpg,png,pdf|max:2048',
         ], [
-            // Custom error messages
+            // Custom Messages for clear response
             'pan_number.unique' => 'This PAN number is already registered.',
             'aadhar_number.unique' => 'This Aadhar number is already registered.',
+            'pan_number.different' => 'PAN Number cannot be same as Aadhar Number.',
+            'aadhar_number.different' => 'Aadhar Number cannot be same as PAN Number.',
         ]);
 
         if ($validator->fails()) return response()->json(['status' => false, 'errors' => $validator->errors()], 422);
@@ -62,17 +78,16 @@ class CustomerController extends Controller
                 'is_deleted' => 0
             ]);
 
+            // File upload logic same rahega...
             $panPath = null;
             $aadharPath = null;
 
-            // Handle PAN upload
             if ($request->hasFile('pan_file_path')) {
                 $file = $request->file('pan_file_path');
                 $name = $customer->id . '_pan_' . time() . '.' . $file->getClientOriginalExtension();
                 $panPath = $file->storeAs('uploads/customers', $name, 'public');
             }
 
-            // Handle Aadhar upload
             if ($request->hasFile('aadhar_file_path')) {
                 $file = $request->file('aadhar_file_path');
                 $name = $customer->id . '_aadhar_' . time() . '.' . $file->getClientOriginalExtension();
@@ -107,26 +122,48 @@ class CustomerController extends Controller
     }
 
     // Update customer
-    public function update(Request $request, $id)
+   public function update(Request $request, $id)
     {
         $customer = Customer::where('id', $id)->where('is_deleted', 0)->first();
         if (!$customer) return response()->json(['status' => false, 'message' => 'Not found'], 404);
 
+        $uniqueRule = Rule::unique('customers')->ignore($customer->id)->where(fn ($q) => $q->where('is_deleted', 0));
+
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string',
             'phone' => 'sometimes|numeric|digits:10',
-            'email' => [
-                'nullable', 
-                'email', 
-                Rule::unique('customers')->ignore($customer->id)->where(fn ($q) => $q->where('is_deleted', 0))
+            'type' => 'sometimes|in:SELLER,BUYER,BOTH',
+            'email' => ['nullable', 'email', $uniqueRule],
+            
+            // FIX: Added 'different' rule in Update as well
+            'pan_number' => [
+                'sometimes', 
+                'string', 
+                'alpha_num', 
+                'different:aadhar_number', 
+                $uniqueRule
             ],
+            'aadhar_number' => [
+                'sometimes', 
+                'numeric', 
+                'digits:12', 
+                'different:pan_number', 
+                $uniqueRule
+            ],
+            
             'pan_file_path' => 'nullable|file|mimes:jpg,png,pdf|max:2048',
             'aadhar_file_path' => 'nullable|file|mimes:jpg,png,pdf|max:2048',
+        ], [
+            'pan_number.unique' => 'This PAN number is taken.',
+            'aadhar_number.unique' => 'This Aadhar number is taken.',
+            'pan_number.different' => 'PAN Number cannot be same as Aadhar Number.',
+            'aadhar_number.different' => 'Aadhar Number cannot be same as PAN Number.',
         ]);
 
         if ($validator->fails()) return response()->json(['status' => false, 'errors' => $validator->errors()], 422);
 
         try {
+            // File handling logic same rahega...
             if ($request->hasFile('pan_file_path')) {
                 if ($customer->pan_file_path && Storage::disk('public')->exists($customer->pan_file_path)) {
                     Storage::disk('public')->delete($customer->pan_file_path);
@@ -145,10 +182,8 @@ class CustomerController extends Controller
                 $customer->aadhar_file_path = $file->storeAs('uploads/customers', $name, 'public');
             }
 
-            // Explicitly exclude file inputs from mass update
             $data = $request->except(['pan_file_path', 'aadhar_file_path', '_method']);
             
-            // Only update fields that are present in request
             $customer->fill($data);
             $customer->save();
 

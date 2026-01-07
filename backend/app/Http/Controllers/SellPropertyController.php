@@ -128,21 +128,29 @@ class SellPropertyController extends Controller
     }
 
     // Show details
-    public function show($id)
+   public function show($id)
     {
+        // Search by property_id instead of id
         $sale = SellProperty::with(['property', 'buyer', 'transactions'])
                             ->where('property_id', $id)
                             ->where('is_deleted', 0)
-                            ->firstOrFail();
+                            ->first(); // FIX: Removed firstOrFail()
+
+        // Check explicitly
+        if (!$sale) {
+            return response()->json([
+                'status' => false, 
+                'message' => 'No sale record found for this Property ID.'
+            ], 404);
+        }
 
         // Append url
         if ($sale->document_file) {
             $sale->document_url = Storage::url($sale->document_file);
         }
 
-        return response()->json($sale);
+        return response()->json(['status' => true, 'data' => $sale]);
     }
-
     // Update sale
     public function update(Request $request, $id)
     {
