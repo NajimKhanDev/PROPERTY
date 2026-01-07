@@ -82,7 +82,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/reports/dashboard', [ReportController::class, 'getDashboardStats']);
     Route::get('/reports/daybook', [ReportController::class, 'getDaybook']);
     Route::get('/reports/dues', [ReportController::class, 'getDuesReport']);
-    Route::get('/reports/sales-performance', [ReportController::class, 'getSoldPropertiesPnL']);
+    Route::get('/reports/sales-performance', [ReportController::class, 'getProfitLoss']);
     Route::get('/reports/charts/monthly', [ReportController::class, 'getMonthlyTrend']);
 
     //Sell Property

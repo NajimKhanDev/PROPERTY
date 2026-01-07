@@ -11,6 +11,8 @@ class Transaction extends Model
 
     protected $fillable = [
         'property_id',
+        'sell_property_id',
+        'type',             
         'amount',
         'payment_date',
         'payment_mode',
@@ -25,9 +27,15 @@ class Transaction extends Model
         'is_deleted'   => 'boolean'
     ];
 
-    // Relationship: Transaction belongs to a Property
+    // Parent Inventory
     public function property()
     {
         return $this->belongsTo(Property::class);
+    }
+
+    // New: Specific Sale Deal Link
+    public function sale_deal()
+    {
+        return $this->belongsTo(SellProperty::class, 'sell_property_id');
     }
 }

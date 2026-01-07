@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Property;
 use App\Models\Transaction;
+use App\Models\SellProperty;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -11,86 +12,77 @@ use Carbon\Carbon;
 class ReportController extends Controller
 {
     /**
-     * 1. DASHBOARD STATS (One-Shot Summary)
+     * 1. DASHBOARD STATS (Summary)
      */
     public function getDashboardStats(Request $request)
     {
-        // Date filters prepare karo
-        $startDate = $request->input('start_date');
-        $endDate = $request->input('end_date');
+        // 1. Date filters
+        $start = $request->start_date;
+        $end   = $request->end_date;
 
-        // Base Queries (Reusable)
-        $propQuery = Property::where('is_deleted', 0);
-        $txnQuery  = Transaction::where('is_deleted', 0);
-
-        if ($startDate && $endDate) {
-            $propQuery->whereBetween('date', [$startDate, $endDate]);
-            $txnQuery->whereBetween('payment_date', [$startDate, $endDate]);
-        }
-
-        // --- SQL AGGREGATES (Fast Calculations) ---
+        // 2. Inventory Counts (Stock)
+        $inventory = Property::where('transaction_type', 'PURCHASE')->where('is_deleted', 0);
         
-        // 1. Inventory Counts
-        $totalProperties = (clone $propQuery)->count();
-        $totalSold       = (clone $propQuery)->where('transaction_type', 'SELL')->count();
-        $totalPurchased  = (clone $propQuery)->where('transaction_type', 'PURCHASE')->count();
+        if ($start && $end) $inventory->whereBetween('date', [$start, $end]);
+        
+        $totalStock = (clone $inventory)->count();
+        $soldStock  = (clone $inventory)->where('status', '!=', 'AVAILABLE')->count();
+        
+        // 3. Deal Values (Paper Money)
+        // Purchase Cost
+        $totalCost = (clone $inventory)->sum('total_amount');
+        
+        // Sales Value (From SellProperty)
+        $salesQuery = SellProperty::where('is_deleted', 0);
+        if ($start && $end) $salesQuery->whereBetween('sale_date', [$start, $end]);
+        $totalSalesVal = $salesQuery->sum('total_sale_amount');
 
-        // 2. Paper Money (Deal Value)
-        $totalDealSellValue = (clone $propQuery)->where('transaction_type', 'SELL')->sum('total_amount');
-        $totalDealBuyValue  = (clone $propQuery)->where('transaction_type', 'PURCHASE')->sum('total_amount');
+        // 4. REAL CASH FLOW (From Transactions)
+        $cashQuery = DB::table('transactions')->where('is_deleted', 0);
 
-        // 3. Real Cash 
- 
-        $cashStats = DB::table('transactions')
-            ->join('properties', 'transactions.property_id', '=', 'properties.id')
-            ->select(
-                DB::raw("SUM(CASE WHEN properties.transaction_type = 'SELL' THEN transactions.amount ELSE 0 END) as total_in"),
-                DB::raw("SUM(CASE WHEN properties.transaction_type = 'PURCHASE' THEN transactions.amount ELSE 0 END) as total_out")
-            )
-            ->where('transactions.is_deleted', 0)
-            ->where('properties.is_deleted', 0);
+        if ($start && $end) $cashQuery->whereBetween('payment_date', [$start, $end]);
 
-        if ($startDate && $endDate) {
-            $cashStats->whereBetween('transactions.payment_date', [$startDate, $endDate]);
-        }
-
-        $cashData = $cashStats->first();
+        $cashStats = $cashQuery->select(
+            DB::raw("SUM(CASE WHEN type = 'CREDIT' THEN amount ELSE 0 END) as total_in"),
+            DB::raw("SUM(CASE WHEN type = 'DEBIT' THEN amount ELSE 0 END) as total_out")
+        )->first();
 
         return response()->json([
             'status' => true,
-            'period' => ($startDate) ? "$startDate to $endDate" : "All Time",
+            'period' => ($start) ? "$start to $end" : "All Time",
             'data' => [
                 'inventory' => [
-                    'total' => $totalProperties,
-                    'purchased' => $totalPurchased,
-                    'sold' => $totalSold,
-                    'available' => $totalPurchased - $totalSold
+                    'total_plots' => $totalStock,
+                    'sold_plots'  => $soldStock,
+                    'available'   => $totalStock - $soldStock
                 ],
-                'deal_value' => [
-                    'sales_volume' => $totalDealSellValue,
-                    'purchase_cost' => $totalDealBuyValue, 
-                    'expected_profit' => $totalDealSellValue - $totalDealBuyValue
+                'value' => [
+                    'purchase_cost' => $totalCost,      // Paisa jo lagna tha
+                    'sales_value'   => $totalSalesVal,  // Paisa jo aana tha
+                    'paper_profit'  => $totalSalesVal - ($soldStock > 0 ? ($totalCost / $totalStock * $soldStock) : 0) // Approx profit
                 ],
                 'cash_flow' => [
-                    'received' => (float) $cashData->total_in,  
-                    'paid'     => (float) $cashData->total_out, 
-                    'net_balance' => (float) ($cashData->total_in - $cashData->total_out)
+                    'received'    => (float) $cashStats->total_in,  // Jeb me aaya
+                    'paid'        => (float) $cashStats->total_out, // Jeb se gaya
+                    'net_balance' => (float) ($cashStats->total_in - $cashStats->total_out)
                 ]
             ]
         ]);
     }
 
     /**
-     * 2. DAYBOOK (Daily Transaction Register)
+     * 2. DAYBOOK (Daily Register)
      */
     public function getDaybook(Request $request)
     {
-        $query = Transaction::with(['property' => function($q) {
-            $q->select('id', 'title', 'transaction_type', 'party_name'); 
-        }])
+        // Fetch transactions with links
+        $query = Transaction::with([
+            'property:id,title', 
+            'sale_deal.buyer:id,name' // Load buyer via sale deal
+        ])
         ->where('is_deleted', 0);
 
-        // Date Filter
+        // Apply filters
         if ($request->filled('start_date') && $request->filled('end_date')) {
             $query->whereBetween('payment_date', [$request->start_date, $request->end_date]);
         }
@@ -98,23 +90,33 @@ class ReportController extends Controller
         // Sorting
         $query->orderBy('payment_date', 'desc')->orderBy('id', 'desc');
 
-        // Pagination (Very Important for Speed)
+        // Pagination
         $transactions = $query->paginate($request->input('per_page', 20));
 
-        // Format Data properly for Frontend
-        $formattedData = collect($transactions->items())->map(function ($txn) {
-      
-            $isCredit = $txn->property && $txn->property->transaction_type === 'SELL';
+        // Format data
+        $formatted = collect($transactions->items())->map(function ($txn) {
             
+            // Logic to find Party Name
+            $party = "N/A";
+            if ($txn->type === 'CREDIT' && $txn->sale_deal) {
+                $party = $txn->sale_deal->buyer->name ?? 'Customer';
+            } elseif ($txn->type === 'DEBIT') {
+                // For Debit, we can load seller from property (Vendor)
+                // You can add 'property.seller' in with() above if needed
+                $party = "Vendor / Landlord"; 
+            }
+
             return [
-                'id' => $txn->id,
-                'date' => $txn->payment_date->format('d-M-Y'),
-                'property_title' => $txn->property->title ?? 'N/A',
-                'party_name' => $txn->property->party_name ?? 'N/A',
-                'type' => $isCredit ? 'CREDIT (IN)' : 'DEBIT (OUT)',
-                'amount' => $txn->amount,
-                'mode' => $txn->payment_mode,
-                'remarks' => $txn->remarks
+                'id'           => $txn->id,
+                'date'         => $txn->payment_date->format('d-M-Y'),
+                'property'     => $txn->property->title ?? 'N/A',
+                'party'        => $party,
+                'type'         => $txn->type, // CREDIT or DEBIT
+                'amount'       => $txn->amount,
+                'mode'         => $txn->payment_mode,
+                'reference'    => $txn->reference_no,
+                'remarks'      => $txn->remarks,
+                'color'        => ($txn->type === 'CREDIT') ? 'text-green-600' : 'text-red-600'
             ];
         });
 
@@ -125,100 +127,100 @@ class ReportController extends Controller
                 'current_page' => $transactions->currentPage(),
                 'last_page' => $transactions->lastPage(),
             ],
-            'data' => $formattedData
+            'data' => $formatted
         ]);
     }
 
     /**
      * 3. OUTSTANDING DUES (Recovery List)
-
+     * Focus: Kisse paisa lena baaki hai? (Customers)
      */
-  public function getDuesReport(Request $request)
+    public function getDuesReport(Request $request)
     {
-        // 1. Query Start
-        
-        $query = Property::with('customer:id,name,phone') 
-            ->select('id', 'customer_id', 'title', 'total_amount', 'paid_amount', 'due_amount', 'date')
-            ->where('transaction_type', 'SELL') 
-            ->where('due_amount', '>', 0)   
+        // Target: SellProperty where pending > 0
+        $query = SellProperty::with(['buyer:id,name,phone', 'property:id,title'])
+            ->select('id', 'customer_id', 'property_id', 'total_sale_amount', 'received_amount', 'pending_amount', 'sale_date')
+            ->where('pending_amount', '>', 0)
             ->where('is_deleted', 0);
 
-        // 2. Search Logic 
+        // Search logic
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->whereHas('customer', function($q) use ($search) {
-                $q->where('name', 'like', '%' . $search . '%')
-                  ->orWhere('phone', 'like', '%' . $search . '%');
+            $query->whereHas('buyer', function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%");
             });
         }
 
-        // 3. Calculation
-        
-        $totalPending = (clone $query)->sum('due_amount');
-
-        // 4. Pagination
-        $defaulters = $query->orderBy('due_amount', 'desc')->paginate(20);
+        $totalPending = (clone $query)->sum('pending_amount');
+        $defaulters = $query->orderBy('pending_amount', 'desc')->paginate(20);
 
         return response()->json([
             'status' => true,
-            'total_pending_amount' => $totalPending, 
+            'total_recoverable' => $totalPending,
             'data' => $defaulters
         ]);
     }
 
     /**
-     * 4. PROFIT & LOSS (Detailed)
+     * 4. PROFIT & LOSS (Real Deal Analysis)
      */
-    public function getSoldPropertiesPnL(Request $request)
+    public function getProfitLoss(Request $request)
     {
-     
-        
-        $query = Property::where('transaction_type', 'SELL')
-                         ->where('is_deleted', 0);
+        // Get all Sales
+        $query = SellProperty::with(['property']) // Need property to get Cost Price
+                             ->where('is_deleted', 0);
 
-        if ($request->filled('start_date') && $request->filled('end_date')) {
-            $query->whereBetween('date', [$request->start_date, $request->end_date]);
+        if ($request->filled('start_date')) {
+            $query->whereBetween('sale_date', [$request->start_date, $request->end_date]);
         }
 
-        $soldProperties = $query->orderBy('date', 'desc')->get();
+        $sales = $query->latest('sale_date')->get();
 
-       
+        $report = $sales->map(function ($deal) {
+            // Cost Price (Purchase Rate)
+            $costPrice = $deal->property->total_amount ?? 0; // Inventory Cost
+            
+            // Selling Price
+            $salePrice = $deal->total_sale_amount;
 
-        $reportData = $soldProperties->map(function ($prop) {
-          
+            // Profit
+            $profit = $salePrice - $costPrice;
+            $margin = ($costPrice > 0) ? round(($profit / $costPrice) * 100, 2) : 100;
+
             return [
-                'property' => $prop->title,
-                'sold_to' => $prop->party_name,
-                'sale_price' => $prop->total_amount,
-                'received_so_far' => $prop->paid_amount,
-                'pending' => $prop->due_amount,
-                'deal_date' => $prop->date->format('d-M-Y')
+                'deal_id'     => $deal->invoice_no,
+                'property'    => $deal->property->title ?? 'N/A',
+                'sale_date'   => $deal->sale_date,
+                'cost_price'  => $costPrice,
+                'sale_price'  => $salePrice,
+                'profit'      => $profit,
+                'margin_per'  => $margin . '%',
+                'status'      => ($profit >= 0) ? 'PROFIT' : 'LOSS'
             ];
         });
 
         return response()->json([
             'status' => true,
-            'total_sales_value' => $soldProperties->sum('total_amount'),
-            'total_cash_collected' => $soldProperties->sum('paid_amount'),
-            'data' => $reportData
+            'total_profit' => $report->sum('profit'),
+            'data' => $report
         ]);
     }
 
     /**
-     * 5. MONTHLY GRAPH DATA (For Charts)
+     * 5. MONTHLY TREND (Graph Data)
      */
     public function getMonthlyTrend()
     {
-        // Last 12 Months Cash IN vs OUT
+        // Group by Month using Type
         $trend = DB::table('transactions')
-            ->join('properties', 'transactions.property_id', '=', 'properties.id')
             ->select(
-                DB::raw("DATE_FORMAT(transactions.payment_date, '%Y-%m') as month"),
-                DB::raw("SUM(CASE WHEN properties.transaction_type = 'SELL' THEN transactions.amount ELSE 0 END) as cash_in"),
-                DB::raw("SUM(CASE WHEN properties.transaction_type = 'PURCHASE' THEN transactions.amount ELSE 0 END) as cash_out")
+                DB::raw("DATE_FORMAT(payment_date, '%Y-%m') as month"),
+                DB::raw("SUM(CASE WHEN type = 'CREDIT' THEN amount ELSE 0 END) as income"),
+                DB::raw("SUM(CASE WHEN type = 'DEBIT' THEN amount ELSE 0 END) as expense")
             )
-            ->where('transactions.is_deleted', 0)
-            ->where('transactions.payment_date', '>=', Carbon::now()->subMonths(12)) // Last 12 months
+            ->where('is_deleted', 0)
+            ->where('payment_date', '>=', Carbon::now()->subMonths(12))
             ->groupBy('month')
             ->orderBy('month', 'asc')
             ->get();
