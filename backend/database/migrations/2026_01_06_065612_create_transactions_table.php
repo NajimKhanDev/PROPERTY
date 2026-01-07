@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             
             // Link to Property
-            $table->foreignId('property_id')->constrained('properties')->onDelete('cascade');
+        $table->foreignId('property_id')->constrained('properties')->onDelete('restrict');
             // Specific Deal Link (Only for Sales transactions)
        $table->unsignedBigInteger('sell_property_id')->nullable();
 $table->foreign('sell_property_id')->references('id')->on('sell_properties')->onDelete('cascade');
