@@ -12,34 +12,59 @@ use Illuminate\Support\Facades\Storage;
 class PropertyController extends Controller
 {
     // List properties
+   // List properties with Advanced Filters
     public function index(Request $request)
     {
-        // Eager load relationships
+        // 1. Base Query
         $query = Property::with(['seller:id,name,phone', 'buyer:id,name,phone'])
-                         ->where('is_deleted', 0)
-                         ->latest('date');
+                         ->where('is_deleted', 0);
 
-        // Filter by Transaction Type
-        if ($request->filled('type')) {
-            $query->where('transaction_type', $request->type);
+        // 2. Filter: Transaction Type (PURCHASE or SELL)
+        if ($request->filled('transaction_type')) {
+            $query->where('transaction_type', $request->transaction_type);
         }
 
-        // Global Search
+        // 3. Filter: Status (AVAILABLE, SOLD, BOOKED)
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // 4. Filter: Category (LAND, FLAT, HOUSE, etc.)
+        if ($request->filled('category')) {
+            $query->where('category', $request->category);
+        }
+
+        // 5. Filter: Date Range (From - To)
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $query->whereBetween('date', [$request->start_date, $request->end_date]);
+        }
+
+        // 6. Global Search (Title, Invoice, Party Name)
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
-                $q->whereHas('seller', function($subQ) use ($search){
-                    $subQ->where('name', 'like', "%{$search}%");
-                })
-                ->orWhereHas('buyer', function($subQ) use ($search){
-                    $subQ->where('name', 'like', "%{$search}%");
-                })
-                ->orWhere('title', 'like', "%{$search}%")
-                ->orWhere('invoice_no', 'like', "%{$search}%");
+                $q->where('title', 'like', "%{$search}%")
+                  ->orWhere('invoice_no', 'like', "%{$search}%")
+                  ->orWhereHas('seller', function($subQ) use ($search){
+                      $subQ->where('name', 'like', "%{$search}%");
+                  })
+                  ->orWhereHas('buyer', function($subQ) use ($search){
+                      $subQ->where('name', 'like', "%{$search}%");
+                  });
             });
         }
 
-        return response()->json($query->paginate(10));
+        // 7. Sorting (Dynamic)
+        // Default: Date Descending (Newest first)
+        $sortColumn = $request->input('sort_by', 'date'); 
+        $sortOrder  = $request->input('sort_order', 'desc');
+        $query->orderBy($sortColumn, $sortOrder);
+
+        // 8. Pagination (Dynamic)
+        // Default: 10 records per page
+        $perPage = $request->input('per_page', 10);
+        
+        return response()->json($query->paginate($perPage));
     }
 
     // Create property (Inventory/Direct Entry)
