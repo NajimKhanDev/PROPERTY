@@ -8,7 +8,8 @@ use App\Models\Role;
 use App\Models\Customer;
 use App\Models\Property;
 use App\Models\Transaction;
-use App\Models\SellProperty; 
+use App\Models\SellProperty;
+use App\Models\PropertyDocument; // Added this
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Faker\Factory as Faker;
@@ -81,8 +82,8 @@ class DatabaseSeeder extends Seeder
                 // 1. DEBIT TRANSACTION (Purchase Expense)
                 Transaction::create([
                     'property_id' => $property->id,
-                    'sell_property_id' => null, 
-                    'type' => 'DEBIT',          
+                    'sell_property_id' => null, // Expense has no sale ID
+                    'type' => 'DEBIT',          // Money Out
                     'amount' => $totalCost,
                     'payment_date' => $property->date,
                     'payment_mode' => 'CHEQUE',
@@ -126,14 +127,13 @@ class DatabaseSeeder extends Seeder
                     $installmentAmount = floor($finalSalePrice / $totalInstallmentsPlan);
 
                     // How many did they actually pay?
-                    // If fully paid -> 4. If not -> random 1 to 3.
                     $paymentsMade = $isFullyPaid ? $totalInstallmentsPlan : $faker->numberBetween(1, 3);
 
                     $collected = 0;
 
                     for ($k = 1; $k <= $paymentsMade; $k++) {
                         
-                        // If it's the last planned installment AND fully paid, adjust amount to match total
+                        // Adjust last installment if fully paid
                         $currentPay = $installmentAmount;
                         if ($isFullyPaid && $k == $totalInstallmentsPlan) {
                             $currentPay = $finalSalePrice - $collected;
@@ -170,10 +170,24 @@ class DatabaseSeeder extends Seeder
                         'status' => $status,
                         'buyer_id' => $buyer->id
                     ]);
+
+                    // ==========================================
+                    // 4. GENERATE SALE DOCUMENTS (NEW ADDITION)
+                    // ==========================================
+                    $docCount = $faker->numberBetween(1, 3); // 1 to 3 docs per sale
+                    for ($d = 0; $d < $docCount; $d++) {
+                        PropertyDocument::create([
+                            'property_id' => $property->id,
+                            'sell_property_id' => $saleDeal->id, // Linked to Sale
+                            'doc_name' => $faker->randomElement(['Sale Deed', 'Booking Agreement', 'Customer KYC', 'Payment Receipt']),
+                            'doc_file' => 'demo/sample_doc.pdf', // Dummy path
+                            'is_deleted' => 0
+                        ]);
+                    }
                 }
             }
 
-            $this->command->info('Seeding Done: Data created with Pending Dues.');
+            $this->command->info('Seeding Done: Data created with Pending Dues & Documents.');
             DB::commit();
 
         } catch (\Exception $e) {
