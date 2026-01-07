@@ -284,4 +284,80 @@ class TransactionController extends Controller
             return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
         }
     }
+
+    /**
+     * GLOBAL: Get All Transactions (With Filters)
+     */
+  /**
+     * GET ALL TRANSACTIONS (Advanced Filters & Search)
+     */
+    public function getAllTransactions(Request $request)
+    {
+        // 1. Base Query with Relationships
+        $query = Transaction::with([
+            'property:id,title,seller_id', 
+            'property.seller:id,name,phone', // Vendor (For DEBIT)
+            'sale_deal.buyer:id,name,phone'  // Customer (For CREDIT)
+        ])
+        ->where('is_deleted', 0);
+
+        // 2. Filter: Transaction Type
+        if ($request->filled('type')) { // 'CREDIT' or 'DEBIT'
+            $query->where('type', $request->type);
+        }
+
+        // 3. Filter: Payment Mode
+        if ($request->filled('payment_mode')) { // 'CASH', 'UPI', etc.
+            $query->where('payment_mode', $request->payment_mode);
+        }
+
+        // 4. Filter: Date Range
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $query->whereBetween('payment_date', [$request->start_date, $request->end_date]);
+        }
+
+        // 5. Filter: Amount Range
+        if ($request->filled('min_amount')) {
+            $query->where('amount', '>=', $request->min_amount);
+        }
+        if ($request->filled('max_amount')) {
+            $query->where('amount', '<=', $request->max_amount);
+        }
+
+        // 6. GLOBAL SEARCH (Powerful)
+        // Searches in: Reference No, Remarks, Property Title, Buyer Name, Vendor Name
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('reference_no', 'like', "%{$search}%")
+                  ->orWhere('remarks', 'like', "%{$search}%")
+                  // Search Property Title
+                  ->orWhereHas('property', function($subQ) use ($search) {
+                      $subQ->where('title', 'like', "%{$search}%");
+                  })
+                  // Search Buyer Name (For CREDIT)
+                  ->orWhereHas('sale_deal.buyer', function($subQ) use ($search) {
+                      $subQ->where('name', 'like', "%{$search}%");
+                  })
+                  // Search Vendor Name (For DEBIT)
+                  ->orWhereHas('property.seller', function($subQ) use ($search) {
+                      $subQ->where('name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        // 7. Sorting
+        $sortField = $request->input('sort_by', 'payment_date'); // Default: payment_date
+        $sortOrder = $request->input('sort_order', 'desc');      // Default: desc
+        $query->orderBy($sortField, $sortOrder);
+
+        // 8. Pagination
+        $perPage = $request->input('per_page', 20);
+        
+        return response()->json([
+            'status' => true,
+            'message' => 'Transactions fetched successfully',
+            'data' => $query->paginate($perPage)
+        ]);
+    }
 }

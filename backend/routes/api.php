@@ -72,11 +72,14 @@ Route::patch('/roles/restore/{id}', [RoleController::class, 'restore']);
     Route::delete('properties/{id}',[PropertyController::class, 'destroy']);
 
    //Transactions
+   Route::get('/transactions/all', [TransactionController::class, 'getAllTransactions']);
    Route::get('/transactions', [TransactionController::class, 'index']);
-    Route::post('/transactions', [TransactionController::class, 'store']);
-    Route::get('/transactions/{id}', [TransactionController::class, 'show']);
-    Route::put('/transactions/{id}', [TransactionController::class, 'update']);
-    Route::delete('/transactions/{id}', [TransactionController::class, 'destroy']);
+   Route::post('/transactions', [TransactionController::class, 'store']);
+   Route::get('/transactions/{id}', [TransactionController::class, 'show']);
+   Route::put('/transactions/{id}', [TransactionController::class, 'update']);
+   Route::delete('/transactions/{id}', [TransactionController::class, 'destroy']);
+
+
     //Transactions for sell property
     Route::get('/transactions/sell-deal/{id}', [TransactionController::class, 'getTransactionsByPropertyId']);
     //Report
