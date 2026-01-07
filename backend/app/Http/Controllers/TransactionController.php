@@ -136,7 +136,43 @@ class TransactionController extends Controller
 
         return response()->json(['status' => true, 'data' => $transaction]);
     }
+   
+    /**
+     * SPECIAL FUNCTION: Fetch Transactions for a Specific Sale Deal
+     * URL Example: /api/transactions/sell-deal/{id}
+     */
+    public function getTransactionsBySaleId($id)
+    {
+        // 1. Check if Sale Deal exists
+        $saleDeal = SellProperty::with(['buyer:id,name,phone', 'property:id,title'])
+                        ->where('id', $id)
+                        ->first();
 
+        if (!$saleDeal) {
+            return response()->json(['status' => false, 'message' => 'Sale Deal not found'], 404);
+        }
+
+        // 2. Fetch Linked Transactions (CREDIT only)
+        $transactions = Transaction::where('sell_property_id', $id)
+                            ->where('type', 'CREDIT') // Only Money In
+                            ->where('is_deleted', 0)
+                            ->latest('payment_date')
+                            ->get();
+
+        // 3. Return Response with Summary
+        return response()->json([
+            'status' => true,
+            'deal_summary' => [
+                'property_title' => $saleDeal->property->title ?? 'N/A',
+                'buyer_name'     => $saleDeal->buyer->name ?? 'N/A',
+                'total_deal_val' => $saleDeal->total_sale_amount,
+                'received_total' => $saleDeal->received_amount, // Calculated from DB column
+                'pending_due'    => $saleDeal->pending_amount,
+                'status'         => ($saleDeal->pending_amount <= 0) ? 'FULLY PAID' : 'PENDING'
+            ],
+            'transactions' => $transactions
+        ]);
+    }
     // Update transaction
     public function update(Request $request, $id)
     {

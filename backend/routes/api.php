@@ -77,7 +77,8 @@ Route::patch('/roles/restore/{id}', [RoleController::class, 'restore']);
     Route::get('/transactions/{id}', [TransactionController::class, 'show']);
     Route::put('/transactions/{id}', [TransactionController::class, 'update']);
     Route::delete('/transactions/{id}', [TransactionController::class, 'destroy']);
-
+    //Transactions for sell property
+    Route::get('/transactions/sell-deal/{id}', [TransactionController::class, 'getTransactionsBySaleId']);
     //Report
     Route::get('/reports/dashboard', [ReportController::class, 'getDashboardStats']);
     Route::get('/reports/daybook', [ReportController::class, 'getDaybook']);
