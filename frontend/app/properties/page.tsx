@@ -19,6 +19,7 @@ export default function PropertiesPage() {
   /* ================= FETCH ================= */
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, page]);
 
   const fetchData = async () => {
@@ -50,26 +51,23 @@ export default function PropertiesPage() {
           Property Management
         </h1>
 
-        <div className="flex gap-2">
-          {activeTab === "PURCHASE" && (
-            <Link
-              href="/properties/buy"
-              className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm hover:bg-green-700"
-            >
-              Buy Property
-            </Link>
-          )}
+        {activeTab === "PURCHASE" && (
+          <Link
+            href="/properties/buy"
+            className="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700"
+          >
+            Buy Property
+          </Link>
+        )}
 
-          {activeTab === "SELL" && (
-            <Link
-              href="/properties/sell"
-              className="px-3 py-1.5 bg-[#0070BB] text-white rounded-md text-sm hover:bg-[#005A99]"
-            >
-              Sell Property
-            </Link>
-          )}
-        </div>
-
+        {activeTab === "SELL" && (
+          <Link
+            href="/properties/sell"
+            className="px-4 py-2 bg-[#0070BB] text-white rounded-md text-sm hover:bg-[#005A99]"
+          >
+            Sell Property
+          </Link>
+        )}
       </div>
 
       {/* ================= TABS ================= */}
@@ -84,10 +82,11 @@ export default function PropertiesPage() {
               setActiveTab(t.value as TabType);
               setPage(1);
             }}
-            className={`px-4 py-2 rounded-md text-sm font-medium ${activeTab === t.value
+            className={`px-4 py-2 rounded-md text-sm font-medium ${
+              activeTab === t.value
                 ? "bg-blue-600 text-white"
                 : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-              }`}
+            }`}
           >
             {t.label}
           </button>
@@ -95,22 +94,22 @@ export default function PropertiesPage() {
       </div>
 
       {/* ================= TABLE ================= */}
-      <div className="bg-white p-5 rounded-xl shadow-sm">
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 text-gray-700">
+          <thead className="bg-gray-50 text-gray-700">
+            <tr>
               {[
                 "S.No",
                 "Title",
                 "Category",
-                "Customer",
+                "Buyer / Seller",
                 "Amount",
                 "Status",
                 "Actions",
               ].map((h) => (
                 <th
                   key={h}
-                  className="px-4 py-3 text-left border-b font-semibold"
+                  className="px-4 py-3 text-left font-semibold border-b"
                 >
                   {h}
                 </th>
@@ -138,38 +137,44 @@ export default function PropertiesPage() {
             {!loading &&
               list.map((row, idx) => (
                 <tr key={row.id} className="hover:bg-blue-50">
-                  <td className="px-4 py-3">{idx + 1}</td>
+                  <td className="px-4 py-3">
+                    {(page - 1) * 10 + idx + 1}
+                  </td>
 
                   <td className="px-4 py-3 font-medium">
-                    {activeTab === "SELL"
-                      ? row.property?.title
-                      : row.title}
+                    {row.title}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    {row.category}
                   </td>
 
                   <td className="px-4 py-3">
                     {activeTab === "SELL"
-                      ? row.property?.category
-                      : row.category}
-                  </td>
-
-                  <td className="px-4 py-3">
-                    {row.buyer?.name || row.seller?.name || "—"}
+                      ? row.buyer?.name || "—"
+                      : row.seller?.name || "—"}
                   </td>
 
                   <td className="px-4 py-3">
                     ₹
                     {Number(
                       activeTab === "SELL"
-                        ? row.total_sale_amount
+                        ? row.total_amount
                         : row.total_amount
                     ).toLocaleString("en-IN")}
                   </td>
 
                   <td className="px-4 py-3">
-                    <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">
-                      {activeTab === "SELL"
-                        ? row.property?.status
-                        : row.status}
+                    <span
+                      className={`px-2 py-0.5 text-xs rounded-full ${
+                        row.status === "BOOKED"
+                          ? "bg-green-100 text-green-700"
+                          : row.status === "AVAILABLE"
+                          ? "bg-blue-100 text-blue-700"
+                          : "bg-gray-100 text-gray-700"
+                      }`}
+                    >
+                      {row.status}
                     </span>
                   </td>
 
@@ -177,7 +182,7 @@ export default function PropertiesPage() {
                     <Link
                       href={
                         activeTab === "SELL"
-                          ? `/properties/sellview?id=${row.property_id}`
+                          ? `/properties/sellview?id=${row.id}`
                           : `/properties/view?id=${row.id}`
                       }
                       className="text-blue-600 hover:underline"
@@ -192,7 +197,7 @@ export default function PropertiesPage() {
       </div>
 
       {/* ================= PAGINATION ================= */}
-      <div className="flex justify-end gap-2 mt-4">
+      <div className="flex justify-end items-center gap-3 mt-4">
         <button
           disabled={page === 1}
           onClick={() => setPage((p) => p - 1)}
@@ -201,8 +206,8 @@ export default function PropertiesPage() {
           Prev
         </button>
 
-        <span className="px-2 py-1 text-sm">
-          Page {page} of {lastPage}
+        <span className="text-sm">
+          Page <b>{page}</b> of <b>{lastPage}</b>
         </span>
 
         <button
