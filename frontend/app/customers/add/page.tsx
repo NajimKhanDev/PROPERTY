@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ProjectApi from "@/app/api/ProjectApis";
 import axiosInstance from "@/app/api/axiosInstance";
+import toast from "react-hot-toast";
 
 type FormValues = {
   name: string;
@@ -58,10 +59,22 @@ export default function AddCustomerPage() {
       });
 
       router.push("/customers");
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert("Failed to add customer");
+
+      const apiErrors = error?.response?.data?.errors;
+
+      if (apiErrors) {
+        Object.values(apiErrors).forEach((messages: any) => {
+          messages.forEach((msg: string) => {
+            toast.error(msg);
+          });
+        });
+      } else {
+        toast.error("Failed to add customer");
+      }
     }
+
   };
 
   const inputClass =

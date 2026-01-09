@@ -3,6 +3,16 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import {
+  LayoutDashboard,
+  Shield,
+  Users,
+  Home,
+  CreditCard,
+  BarChart3,
+  Menu,
+  X,
+} from "lucide-react";
 
 interface SidebarLayoutProps {
   children: React.ReactNode;
@@ -24,8 +34,7 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
         storedUser?.role?.permissions || [];
 
       setUserPermissions(permissions);
-    } catch (err) {
-      console.error("Failed to parse user from localStorage");
+    } catch {
       setUserPermissions([]);
     }
   }, []);
@@ -40,37 +49,43 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
     {
       href: "/dashboard",
       label: "Dashboard",
-      icon: "📊",
+      icon: LayoutDashboard,
       permission: "dashboard.read",
     },
     {
       href: "/roles",
       label: "Roles",
-      icon: "🔐",
+      icon: Shield,
+      permission: "manage_role.read",
+    },
+    {
+      href: "/users",
+      label: "Users",
+      icon: Shield,
       permission: "manage_role.read",
     },
     {
       href: "/customers",
       label: "Customers",
-      icon: "👥",
+      icon: Users,
       permission: "customers.read",
     },
     {
       href: "/properties",
       label: "Properties",
-      icon: "🏠",
+      icon: Home,
       permission: "properties.read",
     },
     {
       href: "/payments",
       label: "Payments",
-      icon: "💳",
+      icon: CreditCard,
       permission: "payments.read",
     },
     {
       href: "/reports",
       label: "Reports",
-      icon: "📈",
+      icon: BarChart3,
       permission: "reports.read",
     },
   ];
@@ -106,9 +121,9 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
           </h1>
           <button
             onClick={closeMobileMenu}
-            className="lg:hidden p-2 rounded-md text-white/80 hover:bg-white/10"
+            className="lg:hidden p-2 rounded-md hover:bg-white/10"
           >
-            ✕
+            <X size={18} />
           </button>
         </div>
 
@@ -116,20 +131,21 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
         <nav className="mt-4 lg:mt-6 space-y-1">
           {visibleNavItems.map((item) => {
             const active = pathname === item.href;
+            const Icon = item.icon;
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 onClick={closeMobileMenu}
-                className={`flex items-center px-4 lg:px-6 py-3 text-sm transition-all
+                className={`flex items-center gap-3 px-4 lg:px-6 py-3 text-sm transition-all
                 ${
                   active
                     ? "bg-[#005A99] border-l-4 border-white"
                     : "hover:bg-[#005A99]/80"
                 }`}
               >
-                <span className="mr-3 text-sm">{item.icon}</span>
+                <Icon size={18} />
                 <span className="font-medium">{item.label}</span>
               </Link>
             );
@@ -150,21 +166,9 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
           <div className="flex items-center justify-between p-4">
             <button
               onClick={() => setIsMobileMenuOpen(true)}
-              className="p-2 rounded-md text-white hover:bg-[#005A99]"
+              className="p-2 rounded-md hover:bg-[#005A99]"
             >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              </svg>
+              <Menu size={22} className="text-white" />
             </button>
 
             <h1 className="text-lg font-semibold text-white">
