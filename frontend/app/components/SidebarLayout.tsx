@@ -72,9 +72,15 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
     },
     {
       href: "/properties",
-      label: "Properties",
+      label: "Byu / Sell Properties",
       icon: Home,
       permission: "properties.read",
+    },
+    {
+      href: "/allproperties",
+      label: "All Properties",
+      icon: Home,
+      permission: "all_properties.read",
     },
     {
       href: "/payments",

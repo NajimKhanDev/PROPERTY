@@ -9,6 +9,7 @@ const MODULES = [
   "Manage Users",
   "Customers",
   "Properties",
+  "All Properties",
   "Payments",
   "Reports",
 ];
