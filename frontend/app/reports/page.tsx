@@ -1,255 +1,339 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import axiosInstance from "@/app/api/axiosInstance";
 
-type Tab = "overview" | "dues" | "sales" | "daybook";
+type Tab = "customers" | "properties" | "transactions";
+
+/* ================= TAILWIND INPUT STYLES ================= */
+const inputClass =
+  "h-9 px-3 rounded-md border border-gray-200 bg-white text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300";
+
+const selectClass =
+  "h-9 px-3 rounded-md border border-gray-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300";
+
+const buttonClass =
+  "h-9 px-4 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition";
 
 export default function ReportsPage() {
-  const [tab, setTab] = useState<Tab>("overview");
-  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<Tab>("properties");
+  const [loading, setLoading] = useState(false);
 
-  const [daybook, setDaybook] = useState<any[]>([]);
-  const [dues, setDues] = useState<any[]>([]);
-  const [sales, setSales] = useState<any[]>([]);
-  const [totalRecoverable, setTotalRecoverable] = useState(0);
-  const [totalProfit, setTotalProfit] = useState(0);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [properties, setProperties] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
 
-  /* ================= FILTERS ================= */
-  const [filters, setFilters] = useState({
-    from: "",
-    to: "",
-    type: "ALL",
-  });
+  /* ================= CUSTOMER FILTERS ================= */
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerType, setCustomerType] =
+    useState<"" | "BUYER" | "SELLER" | "BOTH">("");
+  const [customerPage, setCustomerPage] = useState(1);
 
-  /* ================= LOAD DATA ================= */
+  /* ================= PROPERTY FILTERS ================= */
+  const [propertySearch, setPropertySearch] = useState("");
+  const [propertyStatus, setPropertyStatus] = useState("");
+  const [propertyCategory, setPropertyCategory] = useState("");
+  const [propertyPage, setPropertyPage] = useState(1);
+
+  /* ================= TRANSACTION FILTERS ================= */
+  const [txnType, setTxnType] = useState("");
+  const [paymentMode, setPaymentMode] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [minAmount, setMinAmount] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
+  const [txnSearch, setTxnSearch] = useState("");
+  const [sortBy, setSortBy] = useState("payment_date");
+  const [sortOrder, setSortOrder] = useState("desc");
+  const [txnPage, setTxnPage] = useState(1);
+  const perPage = 10;
+
+  /* ================= TAB BASED FETCH ================= */
   useEffect(() => {
-    loadReports();
-  }, []);
+    if (tab === "customers") fetchCustomers();
+    if (tab === "properties") fetchProperties();
+    if (tab === "transactions") fetchTransactions();
+  }, [tab]);
 
-  const loadReports = async () => {
+  /* ================= API CALLS ================= */
+  const fetchCustomers = async () => {
     try {
       setLoading(true);
-
-      const [daybookRes, duesRes, salesRes] = await Promise.all([
-        axiosInstance.get("/reports/daybook"),
-        axiosInstance.get("/reports/dues"),
-        axiosInstance.get("/reports/sales-performance"),
-      ]);
-
-      setDaybook(daybookRes.data?.data || []);
-      setDues(duesRes.data?.data?.data || []);
-      setTotalRecoverable(Number(duesRes.data?.total_recoverable || 0));
-      setSales(salesRes.data?.data || []);
-      setTotalProfit(Number(salesRes.data?.total_profit || 0));
+      const res = await axiosInstance.get("/reports/customers/all", {
+        params: {
+          search: customerSearch || undefined,
+          type: customerType || undefined,
+          page: customerPage,
+        },
+      });
+      setCustomers(res.data?.data || []);
     } finally {
       setLoading(false);
     }
   };
 
-  /* ================= FILTER LOGIC ================= */
-  const applyDateFilter = (dateStr: string) => {
-    const d = new Date(dateStr);
-    if (filters.from && d < new Date(filters.from)) return false;
-    if (filters.to && d > new Date(filters.to)) return false;
-    return true;
+  const fetchProperties = async () => {
+    try {
+      setLoading(true);
+      const res = await axiosInstance.get("/reports/properties/all", {
+        params: {
+          search: propertySearch || undefined,
+          status: propertyStatus || undefined,
+          category: propertyCategory || undefined,
+          page: propertyPage,
+        },
+      });
+      setProperties(res.data?.data || []);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const filteredDaybook = useMemo(
-    () =>
-      daybook.filter(
-        (d) =>
-          applyDateFilter(d.date) &&
-          (filters.type === "ALL" || d.type === filters.type)
-      ),
-    [daybook, filters]
-  );
-
-  const filteredSales = useMemo(
-    () => sales.filter((s) => applyDateFilter(s.sale_date)),
-    [sales, filters]
-  );
-
-  const filteredDues = useMemo(
-    () => dues.filter((d) => applyDateFilter(d.sale_date)),
-    [dues, filters]
-  );
-
-  if (loading) {
-    return <div className="p-6 text-gray-500">Loading reports...</div>;
-  }
+  const fetchTransactions = async () => {
+    try {
+      setLoading(true);
+      const res = await axiosInstance.get("/transactions/all", {
+        params: {
+          type: txnType || undefined,
+          payment_mode: paymentMode || undefined,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          min_amount: minAmount || undefined,
+          max_amount: maxAmount || undefined,
+          search: txnSearch || undefined,
+          sort_by: sortBy,
+          sort_order: sortOrder,
+          page: txnPage,
+          per_page: perPage,
+        },
+      });
+      setTransactions(res.data?.data?.data || []);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="p-6 space-y-6 text-black bg-gray-50 min-h-screen">
+    <div className="p-6 space-y-6 bg-gray-50 min-h-screen text-gray-900">
       {/* ================= HEADER ================= */}
       <div>
-        <h1 className="text-2xl font-semibold">Reports & Analytics</h1>
+        <h1 className="text-2xl font-semibold">Reports</h1>
         <p className="text-sm text-gray-500">
-          Financial performance & recovery insights
+          Customers, Properties & Transaction Analytics
         </p>
-      </div>
-
-      {/* ================= FILTER BAR ================= */}
-      <div className="bg-white rounded-xl p-4 shadow-sm flex flex-wrap gap-4 items-end">
-        <Filter label="From">
-          <input
-            type="date"
-            className="input"
-            value={filters.from}
-            onChange={(e) =>
-              setFilters({ ...filters, from: e.target.value })
-            }
-          />
-        </Filter>
-
-        <Filter label="To">
-          <input
-            type="date"
-            className="input"
-            value={filters.to}
-            onChange={(e) =>
-              setFilters({ ...filters, to: e.target.value })
-            }
-          />
-        </Filter>
-
-        <Filter label="Type">
-          <select
-            className="input"
-            value={filters.type}
-            onChange={(e) =>
-              setFilters({ ...filters, type: e.target.value })
-            }
-          >
-            <option value="ALL">All</option>
-            <option value="CREDIT">Credit</option>
-            <option value="DEBIT">Debit</option>
-          </select>
-        </Filter>
-
-        <button
-          onClick={() =>
-            setFilters({ from: "", to: "", type: "ALL" })
-          }
-          className="ml-auto text-sm text-blue-600 hover:underline"
-        >
-          Reset Filters
-        </button>
       </div>
 
       {/* ================= TABS ================= */}
       <div className="flex gap-6 border-b border-gray-200">
-        {[
-          ["overview", "Overview"],
-          ["dues", "Dues"],
-          ["sales", "Sales"],
-          ["daybook", "Daybook"],
-        ].map(([k, label]) => (
+        {["properties", "transactions","customers"].map((t) => (
           <button
-            key={k}
-            onClick={() => setTab(k as Tab)}
-            className={`pb-2 text-sm ${
-              tab === k
+            key={t}
+            onClick={() => setTab(t as Tab)}
+            className={`pb-2 text-sm font-medium ${
+              tab === t
                 ? "text-blue-600 border-b-2 border-blue-600"
-                : "text-gray-500"
+                : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            {label}
+            {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
 
-      {/* ================= CONTENT ================= */}
-      {tab === "overview" && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Stat label="Total Profit" value={totalProfit} color="green" />
-          <Stat
-            label="Total Recoverable"
-            value={totalRecoverable}
-            color="red"
-          />
-          <Stat
-            label="Total Transactions"
-            value={filteredDaybook.length}
-            color="blue"
-          />
-        </div>
+      {loading && <div className="text-sm text-gray-500">Loading...</div>}
+
+      {/* ================= CUSTOMERS ================= */}
+      {tab === "customers" && !loading && (
+        <>
+          <div className="flex flex-wrap gap-3 bg-white p-4 rounded-lg border border-gray-100">
+            <input
+              className={inputClass}
+              placeholder="Search name / phone"
+              value={customerSearch}
+              onChange={(e) => setCustomerSearch(e.target.value)}
+            />
+            <select
+              className={selectClass}
+              value={customerType}
+              onChange={(e) => setCustomerType(e.target.value as any)}
+            >
+              <option value="">All Types</option>
+              <option value="BUYER">Buyer</option>
+              <option value="SELLER">Seller</option>
+              <option value="BOTH">Both</option>
+            </select>
+            <button className={buttonClass} onClick={fetchCustomers}>
+              Apply
+            </button>
+          </div>
+
+          <CardTable
+            headers={[
+              "Name",
+              "Phone",
+              "Type",
+              "Bought",
+              "Sold",
+              "Recoverable",
+              "Payable",
+            ]}
+          >
+            {customers.map((c) => (
+              <Row key={c.id}>
+                <Cell>{c.name}</Cell>
+                <Cell>{c.phone}</Cell>
+                <Cell>{c.type}</Cell>
+                <Cell align="right">₹{Number(c.total_bought).toLocaleString("en-IN")}</Cell>
+                <Cell align="right">₹{Number(c.total_sold).toLocaleString("en-IN")}</Cell>
+                <Cell align="right" className="text-red-600">
+                  ₹{Number(c.recoverable).toLocaleString("en-IN")}
+                </Cell>
+                <Cell align="right" className="text-orange-600">
+                  ₹{Number(c.payable).toLocaleString("en-IN")}
+                </Cell>
+              </Row>
+            ))}
+          </CardTable>
+        </>
       )}
 
-      {tab === "daybook" && (
-        <Table
-          headers={[
-            "Date",
-            "Property",
-            "Party",
-            "Type",
-            "Mode",
-            "Amount",
-          ]}
-        >
-          {filteredDaybook.map((d) => (
-            <Row key={d.id}>
-              <Cell>{d.date}</Cell>
-              <Cell>{d.property}</Cell>
-              <Cell>{d.party}</Cell>
-              <Cell>{d.type}</Cell>
-              <Cell>{d.mode}</Cell>
-              <Cell align="right" className={d.color}>
-                ₹{Number(d.amount).toLocaleString("en-IN")}
-              </Cell>
-            </Row>
-          ))}
-        </Table>
+      {/* ================= PROPERTIES ================= */}
+      {tab === "properties" && !loading && (
+        <>
+          <div className="flex flex-wrap gap-3 bg-white p-4 rounded-lg border border-gray-100">
+            <input
+              className={inputClass}
+              placeholder="Search title / invoice / party"
+              value={propertySearch}
+              onChange={(e) => setPropertySearch(e.target.value)}
+            />
+            <select
+              className={selectClass}
+              value={propertyStatus}
+              onChange={(e) => setPropertyStatus(e.target.value)}
+            >
+              <option value="">All Status</option>
+              <option value="AVAILABLE">Available</option>
+              <option value="SOLD">Sold</option>
+              <option value="BOOKED">Booked</option>
+            </select>
+            <input
+              className={inputClass}
+              placeholder="Category"
+              value={propertyCategory}
+              onChange={(e) => setPropertyCategory(e.target.value)}
+            />
+            <button className={buttonClass} onClick={fetchProperties}>
+              Apply
+            </button>
+          </div>
+
+          <CardTable
+            headers={[
+              "Property",
+              "Category",
+              "Status",
+              "Purchase",
+              "Sale",
+              "Profit / Loss",
+              "Margin",
+            ]}
+          >
+            {properties.map((p) => (
+              <Row key={p.id}>
+                <Cell>{p.title}</Cell>
+                <Cell>{p.category}</Cell>
+                <Cell>{p.status}</Cell>
+                <Cell align="right">₹{Number(p.cost_price).toLocaleString("en-IN")}</Cell>
+                <Cell align="right">₹{Number(p.sale_price).toLocaleString("en-IN")}</Cell>
+                <Cell
+                  align="right"
+                  className={
+                    Number(p.profit_loss) >= 0
+                      ? "text-green-600"
+                      : "text-red-600"
+                  }
+                >
+                  ₹{Number(p.profit_loss).toLocaleString("en-IN")}
+                </Cell>
+                <Cell>{p.margin_pct}</Cell>
+              </Row>
+            ))}
+          </CardTable>
+        </>
       )}
 
-      {tab === "dues" && (
-        <Table headers={["Property", "Buyer", "Total", "Received", "Pending"]}>
-          {filteredDues.map((d) => (
-            <Row key={d.id}>
-              <Cell>{d.property.title}</Cell>
-              <Cell>{d.buyer.name}</Cell>
-              <Cell align="right">
-                ₹{Number(d.total_sale_amount).toLocaleString("en-IN")}
-              </Cell>
-              <Cell align="right" className="text-green-600">
-                ₹{Number(d.received_amount).toLocaleString("en-IN")}
-              </Cell>
-              <Cell align="right" className="text-red-600 font-medium">
-                ₹{Number(d.pending_amount).toLocaleString("en-IN")}
-              </Cell>
-            </Row>
-          ))}
-        </Table>
-      )}
+      {/* ================= TRANSACTIONS ================= */}
+      {tab === "transactions" && !loading && (
+        <>
+          <div className="flex flex-wrap gap-3 bg-white p-4 rounded-lg border border-gray-100">
+            <select className={selectClass} value={txnType} onChange={(e) => setTxnType(e.target.value)}>
+              <option value="">All Types</option>
+              <option value="CREDIT">Credit</option>
+              <option value="DEBIT">Debit</option>
+            </select>
 
-      {tab === "sales" && (
-        <Table
-          headers={[
-            "Deal",
-            "Property",
-            "Cost",
-            "Sale",
-            "Profit",
-            "Margin",
-          ]}
-        >
-          {filteredSales.map((s) => (
-            <Row key={s.deal_id}>
-              <Cell>{s.deal_id}</Cell>
-              <Cell>{s.property}</Cell>
-              <Cell align="right">
-                ₹{Number(s.cost_price).toLocaleString("en-IN")}
-              </Cell>
-              <Cell align="right">
-                ₹{Number(s.sale_price).toLocaleString("en-IN")}
-              </Cell>
-              <Cell align="right" className="text-green-600 font-medium">
-                ₹{Number(s.profit).toLocaleString("en-IN")}
-              </Cell>
-              <Cell>{s.margin_per}</Cell>
-            </Row>
-          ))}
-        </Table>
+            <select
+              className={selectClass}
+              value={paymentMode}
+              onChange={(e) => setPaymentMode(e.target.value)}
+            >
+              <option value="">Payment Mode</option>
+              <option value="CASH">Cash</option>
+              <option value="UPI">UPI</option>
+              <option value="BANK">Bank</option>
+            </select>
+
+            <input type="date" className={inputClass} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            <input type="date" className={inputClass} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+
+            <input
+              className={inputClass}
+              placeholder="Min Amount"
+              value={minAmount}
+              onChange={(e) => setMinAmount(e.target.value)}
+            />
+            <input
+              className={inputClass}
+              placeholder="Max Amount"
+              value={maxAmount}
+              onChange={(e) => setMaxAmount(e.target.value)}
+            />
+            <input
+              className={inputClass}
+              placeholder="Search"
+              value={txnSearch}
+              onChange={(e) => setTxnSearch(e.target.value)}
+            />
+            <button className={buttonClass} onClick={fetchTransactions}>
+              Apply
+            </button>
+          </div>
+
+          <CardTable
+            headers={["Date", "Property", "Party", "Type", "Mode", "Amount"]}
+          >
+            {transactions.map((t) => (
+              <Row key={t.id}>
+                <Cell>{t.payment_date?.slice(0, 10)}</Cell>
+                <Cell>{t.property?.title || "-"}</Cell>
+                <Cell>
+                  {t.type === "CREDIT"
+                    ? t.sale_deal?.buyer?.name || "-"
+                    : t.property?.seller?.name || "-"}
+                </Cell>
+                <Cell>{t.type}</Cell>
+                <Cell>{t.payment_mode}</Cell>
+                <Cell
+                  align="right"
+                  className={t.type === "CREDIT" ? "text-green-600" : "text-red-600"}
+                >
+                  ₹{Number(t.amount).toLocaleString("en-IN")}
+                </Cell>
+              </Row>
+            ))}
+          </CardTable>
+        </>
       )}
     </div>
   );
@@ -257,60 +341,19 @@ export default function ReportsPage() {
 
 /* ================= UI HELPERS ================= */
 
-const Filter = ({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) => (
-  <div className="flex flex-col gap-1 text-sm">
-    <label className="text-gray-500">{label}</label>
-    {children}
-  </div>
-);
-
-const Stat = ({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: "green" | "red" | "blue";
-}) => {
-  const map: any = {
-    green: "text-green-600",
-    red: "text-red-600",
-    blue: "text-blue-600",
-  };
-
-  return (
-    <div className="bg-white rounded-xl p-6 shadow-sm">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className={`text-2xl font-semibold ${map[color]}`}>
-        ₹{Number(value).toLocaleString("en-IN")}
-      </p>
-    </div>
-  );
-};
-
-const Table = ({
+const CardTable = ({
   headers,
   children,
 }: {
   headers: string[];
   children: React.ReactNode;
 }) => (
-  <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+  <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
     <table className="w-full text-sm">
       <thead className="bg-gray-50">
         <tr>
           {headers.map((h) => (
-            <th
-              key={h}
-              className="px-4 py-3 text-left font-medium text-gray-500"
-            >
+            <th key={h} className="px-4 py-3 text-left font-medium text-gray-500">
               {h}
             </th>
           ))}
@@ -322,7 +365,7 @@ const Table = ({
 );
 
 const Row = ({ children }: { children: React.ReactNode }) => (
-  <tr className="border-t border-gray-100">{children}</tr>
+  <tr className="border-t border-gray-100 hover:bg-gray-50">{children}</tr>
 );
 
 const Cell = ({
