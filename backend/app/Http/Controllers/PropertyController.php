@@ -11,69 +11,57 @@ use Illuminate\Support\Facades\Storage;
 
 class PropertyController extends Controller
 {
-    // List properties
-   // List properties with Advanced Filters
+    // List properties with filters
     public function index(Request $request)
     {
         // 1. Base Query
         $query = Property::with(['seller:id,name,phone', 'buyer:id,name,phone'])
                          ->where('is_deleted', 0);
 
-        // 2. Filter: Transaction Type (PURCHASE or SELL)
+        // 2. Filter: Transaction Type
         if ($request->filled('transaction_type')) {
             $query->where('transaction_type', $request->transaction_type);
         }
 
-        // 3. Filter: Status (AVAILABLE, SOLD, BOOKED)
+        // 3. Filter: Status
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        // 4. Filter: Category (LAND, FLAT, HOUSE, etc.)
+        // 4. Filter: Category
         if ($request->filled('category')) {
             $query->where('category', $request->category);
         }
 
-        // 5. Filter: Date Range (From - To)
+        // 5. Filter: Date Range
         if ($request->filled('start_date') && $request->filled('end_date')) {
             $query->whereBetween('date', [$request->start_date, $request->end_date]);
         }
 
-        // 6. Global Search (Title, Invoice, Party Name)
+        // 6. Global Search
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
                   ->orWhere('invoice_no', 'like', "%{$search}%")
-                  ->orWhereHas('seller', function($subQ) use ($search){
-                      $subQ->where('name', 'like', "%{$search}%");
-                  })
-                  ->orWhereHas('buyer', function($subQ) use ($search){
-                      $subQ->where('name', 'like', "%{$search}%");
-                  });
+                  ->orWhereHas('seller', fn($s) => $s->where('name', 'like', "%{$search}%"))
+                  ->orWhereHas('buyer', fn($b) => $b->where('name', 'like', "%{$search}%"));
             });
         }
 
-        // 7. Sorting (Dynamic)
-        // Default: Date Descending (Newest first)
-        $sortColumn = $request->input('sort_by', 'date'); 
-        $sortOrder  = $request->input('sort_order', 'desc');
-        $query->orderBy($sortColumn, $sortOrder);
-
-        // 8. Pagination (Dynamic)
-        // Default: 10 records per page
-        $perPage = $request->input('per_page', 10);
+        // 7. Sort and Paginate
+        $query->orderBy($request->input('sort_by', 'date'), $request->input('sort_order', 'desc'));
         
-        return response()->json($query->paginate($perPage));
+        return response()->json($query->paginate($request->input('per_page', 10)));
     }
 
-    // Create property (Inventory/Direct Entry)
+    // Create Inventory (PURCHASE ONLY)
     public function store(Request $request)
     {
+        // Validate Purchase Input
         $request->validate([
-            'transaction_type' => 'required|in:PURCHASE,SELL',
-            'seller_id'        => 'required_if:transaction_type,PURCHASE|nullable|exists:customers,id',
-            'buyer_id'         => 'required_if:transaction_type,SELL|nullable|exists:customers,id',
+            'transaction_type' => 'required|in:PURCHASE', // Strict: Purchase only
+            'seller_id'        => 'required|exists:customers,id', // Vendor required
             'title'            => 'required|string|max:255',
             'category'         => 'required|in:LAND,FLAT,HOUSE,COMMERCIAL,AGRICULTURE',
             'quantity'         => 'required|integer|min:1',
@@ -87,7 +75,7 @@ class PropertyController extends Controller
         DB::beginTransaction();
 
         try {
-            // Financial Calculations
+            // Calculate Financials
             $quantity   = $request->input('quantity', 1);
             $rate       = $request->input('rate', 0);
             $baseAmount = $quantity * $rate;
@@ -102,11 +90,11 @@ class PropertyController extends Controller
             $due        = $total - $paid;
             $date       = $request->filled('date') ? $request->date : now();
 
-            // 1. Create Property
+            // 1. Create Property (Inventory)
             $property = Property::create([
                 'seller_id'        => $request->seller_id, 
-                'buyer_id'         => $request->buyer_id,
-                'transaction_type' => $request->transaction_type,
+                'buyer_id'         => null, // No buyer yet
+                'transaction_type' => 'PURCHASE', // Always Purchase
                 'title'            => $request->title,
                 'category'         => $request->category,
                 'date'             => $date,
@@ -120,26 +108,21 @@ class PropertyController extends Controller
                 'total_amount'     => $total,
                 'paid_amount'      => $paid,
                 'due_amount'       => $due,
-                'status'           => ($request->transaction_type == 'SELL' && $due <= 0) ? 'SOLD' : 'AVAILABLE',
+                'status'           => 'AVAILABLE', // Always Available initially
                 'is_deleted'       => 0
             ]);
 
-            // 2. Create Initial Transaction (UPDATED LOGIC)
+            // 2. Create Debit Transaction (Expense)
             if ($paid > 0) {
-                // Determine Type: 
-                // PURCHASE = DEBIT (Expense/Cost)
-                // SELL = CREDIT (Income)
-                $txnType = ($request->transaction_type === 'SELL') ? 'CREDIT' : 'DEBIT';
-
                 Transaction::create([
                     'property_id'      => $property->id,
-                    'sell_property_id' => null, // IMP: Direct entry has no Deal ID
-                    'type'             => $txnType,
+                    'sell_property_id' => null, 
+                    'type'             => 'DEBIT', // Money Out
                     'amount'           => $paid,
                     'payment_date'     => $request->input('payment_date', $date),
                     'payment_mode'     => $request->input('payment_mode', 'CASH'),
                     'reference_no'     => $request->invoice_no ?? 'TXN-' . time(),
-                    'remarks'          => 'Initial entry payment',
+                    'remarks'          => 'Initial purchase payment',
                     'is_deleted'       => 0
                 ]);
             }
@@ -148,7 +131,7 @@ class PropertyController extends Controller
             if ($request->hasFile('documents')) {
                 foreach ($request->file('documents') as $file) {
                     $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-                    $filePath = $file->storeAs('documents', $filename, 'public');
+                    $filePath = $file->storeAs("uploads/properties/{$property->id}", $filename, 'public');
 
                     PropertyDocument::create([
                         'property_id' => $property->id,
@@ -161,8 +144,8 @@ class PropertyController extends Controller
 
             DB::commit();
             return response()->json([
-                'message' => 'Property created successfully',
-                'data'    => $property->load(['seller', 'buyer', 'documents'])
+                'message' => 'Inventory created successfully',
+                'data'    => $property->load(['seller', 'documents'])
             ], 201);
 
         } catch (\Exception $e) {
@@ -171,7 +154,7 @@ class PropertyController extends Controller
         }
     }
 
-    // Show Property
+    // Show Property Details
     public function show($id)
     {
         $property = Property::with(['documents', 'seller', 'buyer'])
@@ -182,27 +165,22 @@ class PropertyController extends Controller
         return response()->json($property);
     }
 
-    // Update Property (Only details, not payments)
+    // Update Property Details
     public function update(Request $request, $id)
     {
         $property = Property::where('id', $id)->where('is_deleted', 0)->firstOrFail();
 
+        // Validate Update
         $request->validate([
-             'customer_id' => 'nullable|exists:customers,id',
-             'documents'   => 'nullable|array'
+             'seller_id' => 'nullable|exists:customers,id', // Only update seller
+             'documents' => 'nullable|array'
         ]);
 
         DB::beginTransaction();
         try {
-            // Update Parties
-            if ($request->filled('customer_id')) {
-                if ($property->transaction_type === 'PURCHASE') {
-                    $property->seller_id = $request->customer_id;
-                    $property->buyer_id = null;
-                } else {
-                    $property->buyer_id = $request->customer_id;
-                    $property->seller_id = null;
-                }
+            // Update Vendor if needed
+            if ($request->filled('seller_id')) {
+                $property->seller_id = $request->seller_id;
             }
 
             // Recalculate Financials
@@ -218,8 +196,8 @@ class PropertyController extends Controller
             $paid       = $property->paid_amount; 
             $due        = $total - $paid;
 
-            // Update Data
-            $data = $request->except(['_token', 'documents', 'paid_amount', 'customer_id']);
+            // Update Fields
+            $data = $request->except(['_token', 'documents', 'paid_amount', 'buyer_id']);
             $data['base_amount']  = $baseAmount;
             $data['gst_amount']   = $gstAmount;
             $data['total_amount'] = $total;
@@ -227,11 +205,11 @@ class PropertyController extends Controller
 
             $property->update($data);
 
-            // Upload New Docs
+            // Upload New Documents
             if ($request->hasFile('documents')) {
                 foreach ($request->file('documents') as $file) {
                     $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-                    $filePath = $file->storeAs('documents', $filename, 'public');
+                    $filePath = $file->storeAs("uploads/properties/{$property->id}", $filename, 'public');
 
                     PropertyDocument::create([
                         'property_id' => $property->id,
@@ -243,7 +221,7 @@ class PropertyController extends Controller
             }
 
             DB::commit();
-            return response()->json(['message' => 'Updated successfully', 'data' => $property->load(['seller', 'buyer'])]);
+            return response()->json(['message' => 'Updated successfully', 'data' => $property->load('seller')]);
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -251,19 +229,22 @@ class PropertyController extends Controller
         }
     }
 
-    // Soft Delete
+    // Soft Delete Property
     public function destroy($id)
     {
         DB::beginTransaction();
         try {
             $property = Property::findOrFail($id);
             
-            // Delete Property
+            // Cannot delete if Sold
+            if($property->status === 'SOLD' || $property->status === 'BOOKED') {
+                 return response()->json(['message' => 'Cannot delete sold property'], 400);
+            }
+
             $property->update(['is_deleted' => 1]);
             
-            // Delete Transactions (Cascading Soft Delete)
-            Transaction::where('property_id', $property->id)
-                       ->update(['is_deleted' => 1]);
+            // Delete related transactions
+            Transaction::where('property_id', $property->id)->update(['is_deleted' => 1]);
 
             DB::commit();
             return response()->json(['message' => 'Moved to trash']);
@@ -274,26 +255,25 @@ class PropertyController extends Controller
         }
     }
 
-    // Trash List
+    // View Trash
     public function trash()
     {
         $properties = Property::where('is_deleted', 1)->latest()->paginate(10);
         return response()->json($properties);
     }
 
-    // Restore
+    // Restore Property
     public function restore($id)
     {
         $property = Property::findOrFail($id);
         $property->update(['is_deleted' => 0]);
         
-        Transaction::where('property_id', $property->id)
-                   ->update(['is_deleted' => 0]);
+        Transaction::where('property_id', $property->id)->update(['is_deleted' => 0]);
 
         return response()->json(['message' => 'Restored successfully']);
     }
 
-    // Permanent Delete
+    // Force Delete
     public function forceDelete($id)
     {
         $property = Property::findOrFail($id);

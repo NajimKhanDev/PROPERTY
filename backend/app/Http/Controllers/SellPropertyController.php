@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Property;
 use App\Models\SellProperty;
 use App\Models\Transaction;
+use App\Models\PropertyDocument; // Import Document Model
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage; 
@@ -14,32 +15,25 @@ class SellPropertyController extends Controller
     // List sales
     public function index(Request $request)
     {
-        // Fetch data
         $query = SellProperty::with(['property', 'buyer:id,name,phone', 'transactions'])
                              ->where('is_deleted', 0)
                              ->latest('sale_date');
 
-        // Apply search
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
-                $q->whereHas('buyer', function($subQ) use ($search) {
-                    $subQ->where('name', 'like', "%{$search}%");
-                })
-                ->orWhereHas('property', function($subQ) use ($search) {
-                    $subQ->where('title', 'like', "%{$search}%");
-                })
-                ->orWhere('invoice_no', 'like', "%{$search}%");
+                $q->whereHas('buyer', fn($sq) => $sq->where('name', 'like', "%{$search}%"))
+                  ->orWhereHas('property', fn($sq) => $sq->where('title', 'like', "%{$search}%"))
+                  ->orWhere('invoice_no', 'like', "%{$search}%");
             });
         }
 
         return response()->json($query->paginate(10));
     }
 
-    // Create sale
+    // Create sale (Strict Validation Added)
     public function store(Request $request)
     {
-        // Validate input
         $request->validate([
             'property_id'    => 'required|exists:properties,id',
             'customer_id'    => 'required|exists:customers,id',
@@ -51,16 +45,22 @@ class SellPropertyController extends Controller
 
         DB::beginTransaction();
         try {
-            // Check availability
+            // 1. Fetch Property
             $property = Property::findOrFail($request->property_id);
-            if ($property->status === 'SOLD') {
-                return response()->json(['message' => 'Property already sold'], 400);
+
+            // CHECK 1: Is it already sold?
+            if ($property->status !== 'AVAILABLE') {
+                return response()->json(['message' => 'Property is already SOLD or BOOKED.'], 400);
             }
 
-            // Upload file
-            $docPath = null;
-            if ($request->hasFile('document')) {
-                $docPath = $request->file('document')->store('sale_docs', 'public');
+            // CHECK 2: (NEW RULE) Is Purchase Completed?
+            // Agar humne Vendor ko paisa nahi diya, to hum bech nahi sakte
+            if ($property->due_amount > 0) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Cannot sell this property. Purchase payment to Vendor is incomplete.',
+                    'vendor_due' => $property->due_amount
+                ], 400);
             }
 
             // Calculate financials
@@ -75,7 +75,7 @@ class SellPropertyController extends Controller
             $paid       = $request->paid_amount ?? 0;
             $pending    = $totalVal - $paid;
 
-            // Create record
+            // Create Sale Record
             $sale = SellProperty::create([
                 'property_id'       => $property->id,
                 'customer_id'       => $request->customer_id,
@@ -90,24 +90,38 @@ class SellPropertyController extends Controller
                 'total_sale_amount' => $totalVal,
                 'received_amount'   => $paid,
                 'pending_amount'    => $pending,
-                'document_file'     => $docPath,
                 'remarks'           => $request->remarks,
                 'is_deleted'        => 0
             ]);
 
-            // Update inventory
+            // Save Document (Using New Table)
+            if ($request->hasFile('document')) {
+                $file = $request->file('document');
+                $filename = time() . '_' . $file->getClientOriginalName();
+                $path = $file->storeAs("uploads/properties/{$property->id}/sales/{$sale->id}", $filename, 'public');
+
+                PropertyDocument::create([
+                    'property_id'      => $property->id,
+                    'sell_property_id' => $sale->id,
+                    'doc_name'         => 'Sale Agreement',
+                    'doc_file'         => $path,
+                    'is_deleted'       => 0
+                ]);
+            }
+
+            // Update inventory status
             $status = ($pending <= 0) ? 'SOLD' : 'BOOKED';
             $property->update([
                 'status'   => $status,
                 'buyer_id' => $request->customer_id
             ]);
 
-            // Record income
+            // Record Transaction (Income)
             if ($paid > 0) {
                 Transaction::create([
                     'property_id'      => $property->id,
-                    'sell_property_id' => $sale->id, // LINK TO THIS DEAL
-                    'type'             => 'CREDIT',  // Money in
+                    'sell_property_id' => $sale->id,
+                    'type'             => 'CREDIT',
                     'amount'           => $paid,
                     'payment_date'     => $request->sale_date ?? now(),
                     'payment_mode'     => $request->payment_mode ?? 'CASH',
@@ -122,51 +136,42 @@ class SellPropertyController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            if (isset($docPath)) Storage::disk('public')->delete($docPath);
             return response()->json(['message' => $e->getMessage()], 500);
         }
     }
 
     // Show details
-   public function show($id)
+    public function show($id)
     {
-        // Property ID se search
         $sale = SellProperty::with([
-            'property.customer', // Seller info 
-            'buyer',             // Buyer info
-            'transactions' => function($query) {
-               
-                $query->where('is_deleted', 0)->latest(); 
-            }
+            'property.customer', 
+            'buyer',
+            'documents', // New Relation
+            'transactions' => fn($q) => $q->where('is_deleted', 0)->latest()
         ])
-        ->where('property_id', $id)
+        ->where('id', $id) // Fix: Search by Sale ID, not Property ID usually (or keep Logic if routed by prop_id)
         ->where('is_deleted', 0)
         ->first();
 
         if (!$sale) {
-            return response()->json([
-                'status' => false, 
-                'message' => 'No sale record found for this Property ID.'
-            ], 404);
+            // Fallback: Try searching by property_id if ID match fails
+            $sale = SellProperty::with(['property.customer', 'buyer', 'documents', 'transactions'])
+                ->where('property_id', $id)->where('is_deleted', 0)->first();
         }
 
-        // Document URL logic
-        if ($sale->document_file) {
-            $sale->document_url = Storage::url($sale->document_file);
-        }
+        if (!$sale) return response()->json(['message' => 'Not found'], 404);
 
         return response()->json(['status' => true, 'data' => $sale]);
     }
+
     // Update sale
     public function update(Request $request, $id)
     {
         $sale = SellProperty::with('property')->where('id', $id)->where('is_deleted', 0)->firstOrFail();
 
-        // Validate input
         $request->validate([
             'customer_id'    => 'required|exists:customers,id',
             'sale_rate'      => 'required|numeric|min:1',
-            'gst_percentage' => 'nullable|integer|min:0',
             'document'       => 'nullable|file|mimes:pdf,jpg,png|max:5120'
         ]);
 
@@ -174,46 +179,47 @@ class SellPropertyController extends Controller
         try {
             $quantity = $sale->property->quantity ?? 1;
 
-            // Recalculate financials
+            // Recalculate
             $baseAmount = $request->sale_rate * $quantity;
-            $gstPercent = $request->gst_percentage ?? 0;
+            $gstPercent = $request->gst_percentage ?? $sale->gst_percentage;
             $gstAmount  = ($baseAmount * $gstPercent) / 100;
-            $other      = $request->other_charges ?? 0;
-            $discount   = $request->discount ?? 0;
+            $other      = $request->other_charges ?? $sale->other_charges;
+            $discount   = $request->discount ?? $sale->discount_amount;
 
             $newTotal   = ($baseAmount + $gstAmount + $other) - $discount;
             $newPending = $newTotal - $sale->received_amount;
 
-            // Update file
-            $docPath = $sale->document_file;
-            if ($request->hasFile('document')) {
-                if ($sale->document_file) Storage::disk('public')->delete($sale->document_file);
-                $docPath = $request->file('document')->store('sale_docs', 'public');
-            }
-
-            // Update record
             $sale->update([
                 'customer_id'       => $request->customer_id,
-                'sale_date'         => $request->sale_date ?? $sale->sale_date,
-                'invoice_no'        => $request->invoice_no ?? $sale->invoice_no,
                 'sale_rate'         => $request->sale_rate,
                 'sale_base_amount'  => $baseAmount,
-                'gst_percentage'    => $gstPercent,
                 'gst_amount'        => $gstAmount,
-                'other_charges'     => $other,
-                'discount_amount'   => $discount,
                 'total_sale_amount' => $newTotal,
                 'pending_amount'    => $newPending,
-                'document_file'     => $docPath,
                 'remarks'           => $request->remarks ?? $sale->remarks
             ]);
+
+            // Add New Document
+            if ($request->hasFile('document')) {
+                $file = $request->file('document');
+                $filename = time() . '_' . $file->getClientOriginalName();
+                $path = $file->storeAs("uploads/properties/{$sale->property_id}/sales/{$sale->id}", $filename, 'public');
+
+                PropertyDocument::create([
+                    'property_id'      => $sale->property_id,
+                    'sell_property_id' => $sale->id,
+                    'doc_name'         => 'Updated Sale Doc',
+                    'doc_file'         => $path,
+                    'is_deleted'       => 0
+                ]);
+            }
 
             // Update status
             $status = ($newPending <= 0) ? 'SOLD' : 'BOOKED';
             $sale->property()->update(['status' => $status, 'buyer_id' => $request->customer_id]);
 
             DB::commit();
-            return response()->json(['message' => 'Sale updated successfully', 'data' => $sale]);
+            return response()->json(['message' => 'Sale updated', 'data' => $sale]);
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -227,23 +233,17 @@ class SellPropertyController extends Controller
         DB::beginTransaction();
         try {
             $sale = SellProperty::findOrFail($id);
-
-            // Soft delete
             $sale->update(['is_deleted' => 1]);
 
             // Revert inventory
-            $sale->property()->update([
-                'status'   => 'AVAILABLE',
-                'buyer_id' => null
-            ]);
+            $sale->property()->update(['status' => 'AVAILABLE', 'buyer_id' => null]);
 
-            // Remove transactions
-            // Strict check: only transactions linked to THIS sale deal
-            Transaction::where('sell_property_id', $sale->id)
-                       ->update(['is_deleted' => 1]);
+            // Remove transactions & docs
+            Transaction::where('sell_property_id', $sale->id)->update(['is_deleted' => 1]);
+            PropertyDocument::where('sell_property_id', $sale->id)->update(['is_deleted' => 1]);
 
             DB::commit();
-            return response()->json(['message' => 'Sale cancelled successfully']);
+            return response()->json(['message' => 'Sale cancelled']);
 
         } catch (\Exception $e) {
             DB::rollBack();
