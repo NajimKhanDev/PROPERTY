@@ -61,10 +61,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('property-docs/{id}/restore', [PropertyDocumentController::class, 'restore']);
 
     // Standard CRUD
+
     Route::get('property-docs', [PropertyDocumentController::class, 'index']); // ?property_id=1
     Route::post('property-docs', [PropertyDocumentController::class, 'store']);
     Route::delete('property-docs/{id}', [PropertyDocumentController::class, 'destroy']);
 
+    Route::get('/properties/ready-to-sell', [PropertyController::class, 'getReadyToSellProperties']);
     Route::get('properties', [PropertyController::class, 'index']);
     Route::post('properties', [PropertyController::class, 'store']);
     Route::get('properties/{id}', [PropertyController::class, 'show']);

@@ -16,7 +16,7 @@ class CustomerController extends Controller
     public function index()
     {
         try {
-            // FIX: Sirf active customers laye (jo deleted nahi hai)
+            // Get non-deleted records
             $customers = Customer::where('is_deleted', 0)->latest()->paginate(10);
             return response()->json(['status' => true, 'data' => $customers]);
         } catch (\Exception $e) {
@@ -24,48 +24,43 @@ class CustomerController extends Controller
         }
     }
 
-    // Create customer
-   public function store(Request $request)
+    // Create new customer
+    public function store(Request $request)
     {
+        // Define unique scope
         $uniqueRule = Rule::unique('customers')->where(fn ($q) => $q->where('is_deleted', 0));
 
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'phone' => 'required|digits:10',
+            'phone' => 'required|digits:10', // Duplicates allowed
             'type' => 'required|in:SELLER,BUYER,BOTH',
             'email' => ['nullable', 'email', $uniqueRule],
             
-            // FIX: Added 'different:aadhar_number' here
+            // Validate distinct IDs
             'pan_number' => [
-                'required', 
-                'string', 
-                'alpha_num', 
-                'different:aadhar_number', // PAN aur Aadhar same nahi ho sakte
+                'required', 'string', 'alpha_num', 
+                'different:aadhar_number', 
                 $uniqueRule
             ], 
-            
-            // FIX: Added 'different:pan_number' here
             'aadhar_number' => [
-                'required', 
-                'numeric', 
-                'digits:12', 
-                'different:pan_number', // Aadhar aur PAN same nahi ho sakte
+                'required', 'numeric', 'digits:12', 
+                'different:pan_number', 
                 $uniqueRule
             ],
             
             'pan_file_path' => 'nullable|file|mimes:jpg,png,pdf|max:2048',
             'aadhar_file_path' => 'nullable|file|mimes:jpg,png,pdf|max:2048',
         ], [
-            // Custom Messages for clear response
-            'pan_number.unique' => 'This PAN number is already registered.',
-            'aadhar_number.unique' => 'This Aadhar number is already registered.',
-            'pan_number.different' => 'PAN Number cannot be same as Aadhar Number.',
-            'aadhar_number.different' => 'Aadhar Number cannot be same as PAN Number.',
+            'pan_number.unique' => 'PAN already registered.',
+            'aadhar_number.unique' => 'Aadhar already registered.',
+            'pan_number.different' => 'PAN matches Aadhar.',
+            'aadhar_number.different' => 'Aadhar matches PAN.',
         ]);
 
         if ($validator->fails()) return response()->json(['status' => false, 'errors' => $validator->errors()], 422);
 
         try {
+            // Create customer record
             $customer = Customer::create([
                 'name' => $request->name,
                 'phone' => $request->phone,
@@ -78,7 +73,7 @@ class CustomerController extends Controller
                 'is_deleted' => 0
             ]);
 
-            // File upload logic same rahega...
+            // Handle file uploads
             $panPath = null;
             $aadharPath = null;
 
@@ -106,47 +101,40 @@ class CustomerController extends Controller
         }
     }
 
-    // Show customer
+    // Show single customer
     public function show($id)
     {
-        // FIX: Check is_deleted = 0
+        // Find active customer
         $customer = Customer::where('id', $id)->where('is_deleted', 0)->first();
         
         if (!$customer) return response()->json(['status' => false, 'message' => 'Not found'], 404);
-        
-        // FIX: Remove $customer->append(...) to avoid "undefined method" error
-        // Agar full URL chahiye to yahan manually add kar sakte hain:
-        // $customer->pan_url = $customer->pan_file_path ? asset('storage/'.$customer->pan_file_path) : null;
 
         return response()->json(['status' => true, 'data' => $customer]);
     }
 
-    // Update customer
-   public function update(Request $request, $id)
+    // Update customer details
+    public function update(Request $request, $id)
     {
         $customer = Customer::where('id', $id)->where('is_deleted', 0)->first();
         if (!$customer) return response()->json(['status' => false, 'message' => 'Not found'], 404);
 
+        // Ignore current record
         $uniqueRule = Rule::unique('customers')->ignore($customer->id)->where(fn ($q) => $q->where('is_deleted', 0));
 
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string',
-            'phone' => 'sometimes|numeric|digits:10',
+            'phone' => 'sometimes|numeric|digits:10', // Duplicates allowed
             'type' => 'sometimes|in:SELLER,BUYER,BOTH',
             'email' => ['nullable', 'email', $uniqueRule],
             
-            // FIX: Added 'different' rule in Update as well
+            // Validate distinct IDs
             'pan_number' => [
-                'sometimes', 
-                'string', 
-                'alpha_num', 
+                'sometimes', 'string', 'alpha_num', 
                 'different:aadhar_number', 
                 $uniqueRule
             ],
             'aadhar_number' => [
-                'sometimes', 
-                'numeric', 
-                'digits:12', 
+                'sometimes', 'numeric', 'digits:12', 
                 'different:pan_number', 
                 $uniqueRule
             ],
@@ -154,16 +142,16 @@ class CustomerController extends Controller
             'pan_file_path' => 'nullable|file|mimes:jpg,png,pdf|max:2048',
             'aadhar_file_path' => 'nullable|file|mimes:jpg,png,pdf|max:2048',
         ], [
-            'pan_number.unique' => 'This PAN number is taken.',
-            'aadhar_number.unique' => 'This Aadhar number is taken.',
-            'pan_number.different' => 'PAN Number cannot be same as Aadhar Number.',
-            'aadhar_number.different' => 'Aadhar Number cannot be same as PAN Number.',
+            'pan_number.unique' => 'PAN already taken.',
+            'aadhar_number.unique' => 'Aadhar already taken.',
+            'pan_number.different' => 'PAN matches Aadhar.',
+            'aadhar_number.different' => 'Aadhar matches PAN.',
         ]);
 
         if ($validator->fails()) return response()->json(['status' => false, 'errors' => $validator->errors()], 422);
 
         try {
-            // File handling logic same rahega...
+            // Handle file replacements
             if ($request->hasFile('pan_file_path')) {
                 if ($customer->pan_file_path && Storage::disk('public')->exists($customer->pan_file_path)) {
                     Storage::disk('public')->delete($customer->pan_file_path);
@@ -194,7 +182,7 @@ class CustomerController extends Controller
         }
     }
 
-    // Soft delete
+    // Soft delete customer
     public function destroy($id)
     {
         $customer = Customer::find($id);
@@ -204,14 +192,14 @@ class CustomerController extends Controller
         return response()->json(['status' => true, 'message' => 'Deleted Successfully']);
     }
 
-    // Restore customer
+    // Restore deleted customer
     public function restore($id)
     {
-        // FIX: Simple where query instead of global scope magic
+        // Find in trash
         $customer = Customer::where('id', $id)->where('is_deleted', 1)->first();
 
         if (!$customer) {
-            return response()->json(['status' => false, 'message' => 'Not in trash (or ID not found)'], 404);
+            return response()->json(['status' => false, 'message' => 'Not found/trashed'], 404);
         }
 
         $customer->update(['is_deleted' => 0]);
@@ -219,10 +207,10 @@ class CustomerController extends Controller
         return response()->json(['status' => true, 'message' => 'Restored successfully']);
     }
 
-    // List trash
+    // List trashed customers
     public function trash()
     {
-        // FIX: Simple where query
+        // Fetch deleted records
         $data = Customer::where('is_deleted', 1)->latest()->paginate(10);
         return response()->json(['status' => true, 'data' => $data]);
     }
