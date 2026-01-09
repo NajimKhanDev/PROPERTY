@@ -11,10 +11,9 @@ use Illuminate\Support\Facades\Auth;
 
 class UserController extends Controller
 {
-    // Super Admin ID constant
     private $superAdminRoleId = 1; 
 
-    // Register new user
+    // Register User
     public function register(Request $request)
     {
         $request->validate([
@@ -26,7 +25,6 @@ class UserController extends Controller
             'role_id' => 'required|integer',
         ]);
 
-        // Prevent creating Super Admin
         if ($request->role_id == $this->superAdminRoleId) {
             return response()->json(['message' => 'Cannot register Super Admin.'], 403);
         }
@@ -42,6 +40,7 @@ class UserController extends Controller
             'is_deleted' => false,
         ]);
 
+        // Load Role Relationship
         $user->load('role');
 
         return response()->json([
@@ -51,7 +50,7 @@ class UserController extends Controller
         ], 201);
     }
 
-    // Login user
+    // Login User
     public function login(Request $request)
     {
         $request->validate([
@@ -59,7 +58,9 @@ class UserController extends Controller
             'password' => 'required|string',
         ]);
 
-        $user = User::where('email', strtolower(trim($request->email)))
+        // Load Role with User
+        $user = User::with('role')
+            ->where('email', strtolower(trim($request->email)))
             ->where('is_deleted', false)
             ->where('status', 1)
             ->first();
@@ -71,7 +72,6 @@ class UserController extends Controller
         }
 
         $token = $user->createToken('auth_token')->plainTextToken;
-        $user->load('role');
 
         return response()->json([
             'message' => 'Login successful!',
@@ -80,25 +80,41 @@ class UserController extends Controller
         ]);
     }
 
-    // Get current profile
+    // Profile (Current User)
     public function profile(Request $request)
     {
         $user = $request->user()->load('role');
         return response()->json($user);
     }
 
-    // List users (Hide Super Admin)
+    // Show Single User (Admin View)
+    public function show($id)
+    {
+        $user = User::with('role')->find($id);
+
+        if (!$user || $user->is_deleted) {
+            return response()->json(['message' => 'User not found.'], 404);
+        }
+
+        // Hide Super Admin
+        if ($user->id == 1 || $user->role_id == $this->superAdminRoleId) {
+            return response()->json(['message' => 'User not found.'], 404);
+        }
+
+        return response()->json($user);
+    }
+
+    // List Users (With Role Details)
     public function users(Request $request)
     {
-        // 1. Base Query
+        // 1. Eager Load 'role'
         $query = User::with('role')
             ->where('is_deleted', false)
             ->where('status', 1)
-            // HIDE SUPER ADMIN (ID 1 and Role 1)
             ->where('id', '!=', 1) 
             ->where('role_id', '!=', $this->superAdminRoleId);
 
-        // 2. Search Filter
+        // 2. Search
         if ($request->filled('search')) {
             $search = $request->query('search');
             $query->where(function ($q) use ($search) {
@@ -126,12 +142,11 @@ class UserController extends Controller
         );
     }
 
-    // Update user details
+    // Update User
     public function updateUser(Request $request, $id)
     {
         $userToUpdate = User::findOrFail($id);
         
-        // PROTECT SUPER ADMIN
         if ($userToUpdate->id == 1 || $userToUpdate->role_id == $this->superAdminRoleId) {
             return response()->json(['message' => 'Action unauthorized on Super Admin.'], 403);
         }
@@ -153,7 +168,6 @@ class UserController extends Controller
             'status'   => 'nullable|boolean',
         ]);
 
-        // Prevent assigning Super Admin role
         if ($request->role_id == $this->superAdminRoleId) {
             return response()->json(['message' => 'Cannot assign Super Admin role.'], 403);
         }
@@ -164,13 +178,15 @@ class UserController extends Controller
         }
 
         $userToUpdate->update($data);
+        
+        // Return updated user with Role
         return response()->json([
             'message' => 'User updated successfully',
             'user'    => $userToUpdate->fresh()->load('role')
         ]);
     }
 
-    // Change password
+    // Change Password
     public function changePassword(Request $request)
     {
         $user = Auth::user();
@@ -181,18 +197,9 @@ class UserController extends Controller
             'id'           => 'nullable|exists:users,id',
         ]);
 
-        // Admin changing other's password
         if ($request->has('id') && $request->id != $user->id) {
-            
-            // Protect Super Admin Target
-            if ($request->id == 1) {
-                return response()->json(['message' => 'Cannot change Super Admin password.'], 403);
-            }
-
-            // Only Super Admin can do this
-            if ($user->role_id != $this->superAdminRoleId) {
-                return response()->json(['message' => 'Unauthorized action.'], 403);
-            }
+            if ($request->id == 1) return response()->json(['message' => 'Cannot change Super Admin password.'], 403);
+            if ($user->role_id != $this->superAdminRoleId) return response()->json(['message' => 'Unauthorized action.'], 403);
 
             $targetUser = User::findOrFail($request->id);
             $targetUser->update(['password' => Hash::make($request->new_password)]);
@@ -200,7 +207,6 @@ class UserController extends Controller
             return response()->json(['message' => "Password changed for {$targetUser->name}."]);
         }
 
-        // Self change
         if (!Hash::check($request->old_password, $user->password)) {
             return response()->json(['message' => 'Old password incorrect'], 400);
         }
@@ -209,13 +215,12 @@ class UserController extends Controller
         return response()->json(['message' => 'Password changed successfully']);
     }
 
-    // Soft delete user
+    // Delete User
     public function deleteUser($id)
     {
         $userToDelete = User::findOrFail($id);
         $authedUser = Auth::user();
 
-        // Protect Super Admin
         if ($userToDelete->id == 1 || $userToDelete->role_id == $this->superAdminRoleId) {
             return response()->json(['message' => 'Cannot delete Super Admin.'], 403);
         }
@@ -232,15 +237,12 @@ class UserController extends Controller
         return response()->json(['message' => 'User moved to trash.']);
     }
 
-    // Restore user
+    // Restore User
     public function restoreUser($id)
     {
         $user = User::findOrFail($id);
 
-        // Protect Super Admin (Just in case)
-        if ($user->id == 1) {
-             return response()->json(['message' => 'Action unauthorized.'], 403);
-        }
+        if ($user->id == 1) return response()->json(['message' => 'Action unauthorized.'], 403);
 
         if (!$user->is_deleted) {
             return response()->json(['message' => 'User is active.'], 400);
@@ -250,13 +252,12 @@ class UserController extends Controller
         return response()->json(['message' => 'User restored successfully.']);
     }
 
-    // List trashed users
+    // Trashed Users List
     public function trashedUsers()
     {
-        // Hide Super Admin from trash
         $users = User::where('is_deleted', true)
                      ->where('id', '!=', 1)
-                     ->with('role')
+                     ->with('role') // Eager load role here too
                      ->orderByDesc('id')
                      ->get();
 
