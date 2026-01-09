@@ -10,7 +10,7 @@ use App\Http\Controllers\PropertyDocumentController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SellPropertyController;
-
+use App\Http\Controllers\DashboardController;
 
 // Auth routes
 
@@ -107,6 +107,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // 1. Master List of Properties with Profit/Status
     Route::get('/reports/properties/all', [App\Http\Controllers\PropertyReportController::class, 'getAllPropertiesReport']);
 
-    // 2. Specific Property Detailed File
-    Route::get('/reports/properties/{id}', [App\Http\Controllers\PropertyReportController::class, 'getSpecificPropertyReport']);
+// 2. Specific Property Detailed File
+Route::get('/reports/properties/{id}', [App\Http\Controllers\PropertyReportController::class, 'getSpecificPropertyReport']);
+
+Route::get('/dashboard', [DashboardController::class, 'getDashboardData']);
 });
