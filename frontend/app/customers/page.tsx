@@ -102,7 +102,7 @@ export default function CustomersPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-gray-700 text-left">
-                {["Name", "Email", "Phone", "Type", "Actions"].map((h) => (
+                {["S No","Name", "Email", "Phone", "Type", "Actions"].map((h) => (
                   <th
                     key={h}
                     className="px-4 py-3 font-semibold border-b border-gray-100"
