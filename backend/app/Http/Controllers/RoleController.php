@@ -12,9 +12,12 @@ class RoleController extends Controller
     /**
      * List roles with filters
      */
-    public function index(Request $request)
+   public function index(Request $request)
     {
-        $query = Role::query()->where('is_deleted', 0);
+        // Hide Super Admin
+        $query = Role::query()
+                     ->where('is_deleted', 0)
+                     ->where('id', '!=', 1);
 
         if ($request->filled('search')) {
             $query->where('role_name', 'LIKE', '%' . $request->search . '%');
@@ -53,16 +56,16 @@ class RoleController extends Controller
     /**
      * Show single role
      */
+   // Show role
     public function show(Role $role)
     {
-        // Removed ID 1 restriction. Only check if deleted.
-        if ($role->is_deleted) {
+        // Hide Super Admin
+        if ($role->id == 1 || $role->is_deleted) {
             return response()->json(['message' => 'Role not found.'], 404);
         }
 
         return response()->json(['data' => $role]);
     }
-
     /**
      * Update existing role
      */
