@@ -311,4 +311,59 @@ class PropertyController extends Controller
             return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
         }
     }
+    // Get 360-Degree Property View
+    public function getCompletePropertyDetails($id)
+    {
+        // Fetch property with deep relationships
+        $property = Property::with([
+            'seller:id,name,phone,email',  // 1. Who sold to us (Vendor)
+            'documents',                   // 2. Inventory Documents
+            'transactions' => function($q) { // 3. All Money Flow
+                $q->where('is_deleted', 0)->latest('payment_date');
+            },
+            'sell_deal' => function($q) {  // 4. Sale Details
+                $q->with(['buyer:id,name,phone,email', 'documents'])
+                  ->where('is_deleted', 0);
+            }
+        ])
+        ->where('id', $id)
+        ->where('is_deleted', 0)
+        ->firstOrFail();
+
+        // Calculations for Report
+        $purchaseCost = $property->total_amount;
+        $saleRevenue  = $property->sell_deal->total_sale_amount ?? 0;
+        $isSold       = ($property->status !== 'AVAILABLE');
+        $profit       = $isSold ? ($saleRevenue - $purchaseCost) : 0;
+
+        // Custom Formatting
+        $data = [
+            'status' => true,
+            'overview' => [
+                'id'       => $property->id,
+                'title'    => $property->title,
+                'category' => $property->category,
+                'status'   => $property->status,
+                'added_on' => $property->date,
+            ],
+            'financials' => [
+                'purchase_cost' => $purchaseCost,
+                'sale_revenue'  => $isSold ? $saleRevenue : 'Not Sold',
+                'net_profit'    => $isSold ? $profit : 'N/A',
+                'vendor_due'    => $property->due_amount, // Humne dena hai
+                'customer_due'  => $property->sell_deal->pending_amount ?? 0 // Humne lena hai
+            ],
+            'parties' => [
+                'vendor' => $property->seller ?? null,
+                'buyer'  => $property->sell_deal->buyer ?? null
+            ],
+            'documents' => [
+                'inventory_docs' => $property->documents,
+                'sale_docs'      => $property->sell_deal->documents ?? []
+            ],
+            'ledger' => $property->transactions // Transactions List
+        ];
+
+        return response()->json($data);
+    }
 }

@@ -27,7 +27,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     //  Users management
     Route::get('/users', [UserController::class, 'users']);
-    Route::get('/users/{id}', [UserController::class, 'profile']);
+    Route::get('/users/{id}', [UserController::class, 'users']);
     Route::put('/users/{id}', [UserController::class, 'updateUser']);
     Route::delete('/users/{id}', [UserController::class, 'deleteUser']);
 
@@ -67,8 +67,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('property-docs/{id}', [PropertyDocumentController::class, 'destroy']);
 
     Route::get('/properties/ready-to-sell', [PropertyController::class, 'getReadyToSellProperties']);
+    
     Route::get('properties', [PropertyController::class, 'index']);
     Route::post('properties', [PropertyController::class, 'store']);
+    // Property Master Report
+Route::get('/properties/master-view/{id}', [PropertyController::class, 'getCompletePropertyDetails']);
     Route::get('properties/{id}', [PropertyController::class, 'show']);
     Route::put('properties/{id}', [PropertyController::class, 'update']);
     Route::delete('properties/{id}', [PropertyController::class, 'destroy']);
