@@ -10,7 +10,7 @@ use Illuminate\Validation\Rule;
 class RoleController extends Controller
 {
     /**
-     * Display a listing of roles with filtering.
+     * List roles with filters
      */
     public function index(Request $request)
     {
@@ -30,7 +30,7 @@ class RoleController extends Controller
     }
 
     /**
-     * Store a newly created role in storage.
+     * Create new role
      */
     public function store(Request $request)
     {
@@ -39,7 +39,7 @@ class RoleController extends Controller
                 'required', 'string', 'max:255',
                 Rule::unique('roles')->where(fn($q) => $q->where('is_deleted', 0))
             ],
-            'permissions' => 'nullable|array', // Handles JSON permissions
+            'permissions' => 'nullable|array', // Accepts JSON permissions
             'status'      => 'required|boolean',
         ]);
 
@@ -51,29 +51,27 @@ class RoleController extends Controller
     }
 
     /**
-     * Display the specified role.
+     * Show single role
      */
     public function show(Role $role)
     {
-        if ($role->is_deleted || $role->id == 1) {
-            return response()->json(['message' => 'Role not found or restricted.'], 404);
+        // Removed ID 1 restriction. Only check if deleted.
+        if ($role->is_deleted) {
+            return response()->json(['message' => 'Role not found.'], 404);
         }
 
         return response()->json(['data' => $role]);
     }
 
     /**
-     * Update the specified role in storage.
+     * Update existing role
      */
     public function update(Request $request, Role $role)
     {
-        // Restrict Super Admin updates
-        if ($role->id == 1 && Auth::id() != 0) {
-            return response()->json(['message' => 'Unauthorized action on Super Admin.'], 403);
-        }
+        // REMOVED: The Super Admin unauthorized check block
 
         if ($role->is_deleted) {
-            return response()->json(['message' => 'Cannot update a deleted role.'], 400);
+            return response()->json(['message' => 'Cannot update deleted role.'], 400);
         }
 
         $validated = $request->validate([
@@ -91,16 +89,17 @@ class RoleController extends Controller
     }
 
     /**
-     * Remove the specified role (Soft Delete).
+     * Soft delete role
      */
     public function destroy(Role $role)
     {
+        // Safety: Keep restriction here to prevent accidental system lockout
         if ($role->id == 1) {
-            return response()->json(['message' => 'Super Admin role cannot be deleted.'], 403);
+            return response()->json(['message' => 'Cannot delete Super Admin.'], 403);
         }
 
         if ($role->is_deleted) {
-            return response()->json(['message' => 'Role is already deleted.'], 400);
+            return response()->json(['message' => 'Already deleted.'], 400);
         }
 
         $role->update(['is_deleted' => true, 'status' => false]);
@@ -109,14 +108,10 @@ class RoleController extends Controller
     }
 
     /**
-     * Restore a soft-deleted role.
+     * Restore deleted role
      */
     public function restore($id)
     {
-        if ($id == 1) {
-             return response()->json(['message' => 'Action not applicable.'], 400);
-        }
-
         $role = Role::findOrFail($id);
 
         if (!$role->is_deleted) {
@@ -129,7 +124,7 @@ class RoleController extends Controller
     }
 
     /**
-     * List trashed roles.
+     * List trashed roles
      */
     public function trashed()
     {
