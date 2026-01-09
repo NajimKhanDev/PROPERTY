@@ -280,4 +280,35 @@ class PropertyController extends Controller
         $property->delete(); 
         return response()->json(['message' => 'Permanently deleted']);
     }
+    // List Fully Paid Inventory (Ready to Sell)
+    public function getReadyToSellProperties(Request $request)
+    {
+        try {
+            // Filter: Only Available & Fully Paid to Vendor
+            $query = Property::where('transaction_type', 'PURCHASE')
+                             ->where('status', 'AVAILABLE')
+                             ->where('due_amount', '<=', 0) // Zero dues
+                             ->where('is_deleted', 0);
+
+            // Optional Search
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where(function($q) use ($search) {
+                    $q->where('title', 'like', "%{$search}%")
+                      ->orWhere('category', 'like', "%{$search}%");
+                });
+            }
+
+            $properties = $query->latest('date')->get(); // No pagination needed for dropdowns usually
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Fetched ready-to-sell inventory',
+                'data' => $properties
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
 }
