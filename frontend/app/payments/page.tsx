@@ -218,15 +218,15 @@ export default function PaymentsPage() {
 
 
       {/* STATS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-6">
         {[
           { label: "Total Payments", value: payments.length },
-          { label: "Total Amount", value: `₹${totalAmount.toLocaleString("en-IN")}`, color: "text-green-600" },
+          // { label: "Total Amount", value: `₹${totalAmount.toLocaleString("en-IN")}`, color: "text-green-600" },
           // { label: "Average Payment", value: `₹${avgAmount.toLocaleString("en-IN")}`, color: "text-blue-600" },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-xl shadow-sm p-4">
             <p className="text-sm text-gray-500">{s.label}</p>
-            <p className={`text-2xl font-semibold ${s.color || ""}`}>
+            <p className={`text-2xl font-semibold`}>
               {s.value}
             </p>
           </div>

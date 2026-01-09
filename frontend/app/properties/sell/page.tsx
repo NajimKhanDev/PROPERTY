@@ -41,7 +41,7 @@ export default function SellPropertyPage() {
 
   /* ================= LOAD PROPERTIES ================= */
   useEffect(() => {
-    axiosInstance.get(ProjectApi.all_properties).then((res) => {
+    axiosInstance.get(ProjectApi.all_properties_ready_to_sell).then((res) => {
       setProperties(res.data.data || []);
     });
   }, []);
