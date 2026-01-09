@@ -144,6 +144,8 @@ const submitPayment = async () => {
         </Grid>
       </Section>
 
+  
+
       {/* ================= DEAL SUMMARY ================= */}
       {dealData?.deal_summary && (
         <Section title="Deal Summary">
@@ -234,6 +236,42 @@ const submitPayment = async () => {
           </div>
         </Section>
       )}
+
+          {/* ================= DOCUMENTS ================= */}
+{data.documents && (
+  <Section title="Documents">
+    <div className="space-y-6">
+
+      {/* PURCHASE / INVENTORY DOCS */}
+      <div>
+        <h3 className="font-medium mb-2">Purchase / Inventory Documents</h3>
+
+        {data.documents.filter((d: any) => !d.sell_property_id).length === 0 ? (
+          <p className="text-sm text-gray-500">No purchase documents</p>
+        ) : (
+          <DocList
+            docs={data.documents.filter((d: any) => !d.sell_property_id)}
+          />
+        )}
+      </div>
+
+      {/* SALE DOCS */}
+      <div>
+        <h3 className="font-medium mb-2">Sale Documents</h3>
+
+        {data.documents.filter((d: any) => d.sell_property_id).length === 0 ? (
+          <p className="text-sm text-gray-500">No sale documents</p>
+        ) : (
+          <DocList
+            docs={data.documents.filter((d: any) => d.sell_property_id)}
+          />
+        )}
+      </div>
+
+    </div>
+  </Section>
+)}
+
 
 
       {/* ================= ADD PAYMENT MODAL ================= */}
@@ -391,5 +429,34 @@ const Modal = ({
       <h3 className="text-lg font-semibold">{title}</h3>
       {children}
     </div>
+  </div>
+);
+
+
+const DocList = ({ docs }: { docs: any[] }) => (
+  <div className="border rounded-lg divide-y overflow-hidden">
+    {docs.map((doc) => (
+      <div
+        key={doc.id}
+        className="flex items-center justify-between p-3 hover:bg-gray-50"
+      >
+        <div>
+          <p className="font-medium">{doc.doc_name}</p>
+          <p className="text-xs text-gray-500">
+            Uploaded on{" "}
+            {new Date(doc.created_at).toLocaleDateString("en-IN")}
+          </p>
+        </div>
+
+        <a
+          href={`${process.env.NEXT_PUBLIC_IMAGE_BASE_URL}/${doc.doc_file}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-blue-600 hover:underline"
+        >
+          View / Download
+        </a>
+      </div>
+    ))}
   </div>
 );

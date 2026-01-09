@@ -59,36 +59,26 @@ export default function SellPropertyPage() {
 
   /* ================= SUBMIT SALE ================= */
   const submitSale = async () => {
-    if (!selectedProperty) {
-      alert("Property not selected");
-      return;
-    }
+    if (!selectedProperty) return;
 
     try {
       setLoading(true);
 
       const fd = new FormData();
-
-      // ✅ REQUIRED
       fd.append("property_id", formData.property_id);
       fd.append("customer_id", formData.customer_id);
       fd.append("sale_rate", formData.sale_rate);
 
-      // ✅ OPTIONAL
-      if (formData.gst_percentage) {
+      if (formData.gst_percentage)
         fd.append("gst_percentage", formData.gst_percentage);
-      }
 
-      if (formData.paid_amount) {
+      if (formData.paid_amount)
         fd.append("paid_amount", formData.paid_amount);
-      }
 
-      if (formData.document) {
+      if (formData.document)
         fd.append("document", formData.document);
-      }
 
       await axiosInstance.post(ProjectApi.sell_property, fd);
-
       router.push("/properties");
     } catch (err) {
       console.error(err);
@@ -100,124 +90,161 @@ export default function SellPropertyPage() {
   };
 
   const inputClass =
-    "w-full px-3 py-2 rounded-md border border-gray-300 " +
+    "w-full px-3 py-2 rounded-md border border-gray-300 text-sm " +
     "focus:outline-none focus:ring-2 focus:ring-blue-500";
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 pt-10 text-black">
-      <div className="max-w-2xl mx-auto">
-        <Link href="/properties" className="text-sm text-blue-600">
-          ← Back to Properties
-        </Link>
+    <div className="min-h-screen bg-gray-50 px-4 py-10 text-black">
+      <div className="max-w-3xl mx-auto space-y-6">
+        {/* HEADER */}
+        <div>
+          <Link
+            href="/properties"
+            className="text-sm text-blue-600 hover:underline"
+          >
+            ← Back to Properties
+          </Link>
 
-        <h1 className="text-2xl font-bold text-center mt-4 mb-6">
-          Sell Property
-        </h1>
+          <h1 className="text-2xl font-bold mt-2">
+            Sell Property
+          </h1>
+          <p className="text-sm text-gray-500">
+            Complete the sale details and confirm the transaction
+          </p>
+        </div>
 
+        {/* FORM */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
             setOpenConfirm(true);
           }}
-          className="bg-white p-8 rounded-xl shadow space-y-4"
+          className="bg-white rounded-xl shadow-sm border p-8 space-y-6"
         >
           {/* PROPERTY */}
-          <select
-            required
-            className={inputClass}
-            value={formData.property_id}
-            onChange={(e) => {
-              const prop = properties.find(
-                (p) => p.id === Number(e.target.value)
-              );
-              setSelectedProperty(prop || null);
-              setFormData({ ...formData, property_id: e.target.value });
-            }}
-          >
-            <option value="">Select Property</option>
-            {properties.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.title}
-              </option>
-            ))}
-          </select>
+          <Field label="Property">
+            <select
+              required
+              className={inputClass}
+              value={formData.property_id}
+              onChange={(e) => {
+                const prop = properties.find(
+                  (p) => p.id === Number(e.target.value)
+                );
+                setSelectedProperty(prop || null);
+                setFormData({ ...formData, property_id: e.target.value });
+              }}
+            >
+              <option value="">Select Property</option>
+              {properties.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title} ({p.category})
+                </option>
+              ))}
+            </select>
+          </Field>
 
           {/* BUYER */}
-          <select
-            required
-            className={inputClass}
-            value={formData.customer_id}
-            onChange={(e) =>
-              setFormData({ ...formData, customer_id: e.target.value })
-            }
-          >
-            <option value="">Select Buyer</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <Field label="Buyer">
+            <select
+              required
+              className={inputClass}
+              value={formData.customer_id}
+              onChange={(e) =>
+                setFormData({ ...formData, customer_id: e.target.value })
+              }
+            >
+              <option value="">Select Buyer</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </Field>
 
-          {/* SALE RATE */}
-          <input
-            type="number"
-            required
-            placeholder="Sale Rate"
-            className={inputClass}
-            value={formData.sale_rate}
-            onChange={(e) =>
-              setFormData({ ...formData, sale_rate: e.target.value })
-            }
-          />
+          {/* PRICING */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Field label="Sale Rate">
+              <input
+                type="number"
+                required
+                placeholder="₹ Sale amount"
+                className={inputClass}
+                value={formData.sale_rate}
+                onChange={(e) =>
+                  setFormData({ ...formData, sale_rate: e.target.value })
+                }
+              />
+            </Field>
 
-          {/* GST */}
-          <input
-            type="number"
-            placeholder="GST Percentage (optional)"
-            className={inputClass}
-            value={formData.gst_percentage}
-            onChange={(e) =>
-              setFormData({ ...formData, gst_percentage: e.target.value })
-            }
-          />
+            <Field label="GST % (optional)">
+              <input
+                type="number"
+                placeholder="GST"
+                className={inputClass}
+                value={formData.gst_percentage}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    gst_percentage: e.target.value,
+                  })
+                }
+              />
+            </Field>
 
-          {/* PAID AMOUNT */}
-          <input
-            type="number"
-            placeholder="Paid Amount (optional)"
-            className={inputClass}
-            value={formData.paid_amount}
-            onChange={(e) =>
-              setFormData({ ...formData, paid_amount: e.target.value })
-            }
-          />
+            <Field label="Paid Amount (optional)">
+              <input
+                type="number"
+                placeholder="Advance paid"
+                className={inputClass}
+                value={formData.paid_amount}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    paid_amount: e.target.value,
+                  })
+                }
+              />
+            </Field>
+          </div>
 
           {/* DOCUMENT */}
-          <input
-            type="file"
-            accept=".pdf,.jpg,.png"
-            onChange={(e) =>
-              setFormData({
-                ...formData,
-                document: e.target.files?.[0] || null,
-              })
-            }
-          />
+          <Field label="Agreement / Document (optional)">
+            <div className="flex items-center gap-3">
+              <input
+                type="file"
+                accept=".pdf,.jpg,.png"
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    document: e.target.files?.[0] || null,
+                  })
+                }
+                className="text-sm"
+              />
+              {formData.document && (
+                <span className="text-xs text-green-600">
+                  {formData.document.name}
+                </span>
+              )}
+            </div>
+          </Field>
 
-          <div className="flex justify-end gap-3 pt-4">
+          {/* ACTIONS */}
+          <div className="flex justify-end gap-3 pt-4 border-t">
             <Link
               href="/properties"
-              className="px-4 py-2 bg-gray-200 rounded-md"
+              className="px-4 py-2 text-sm bg-gray-100 rounded-md hover:bg-gray-200"
             >
               Cancel
             </Link>
 
             <button
               type="submit"
-              className="px-5 py-2 bg-blue-600 text-white rounded-md"
+              className="px-5 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
-              Sell Property
+              Proceed to Sell
             </button>
           </div>
         </form>
@@ -226,19 +253,22 @@ export default function SellPropertyPage() {
       {/* CONFIRM MODAL */}
       {openConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" />
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
 
-          <div className="relative bg-white p-6 rounded-xl shadow w-full max-w-sm">
-            <h3 className="text-lg font-semibold">Confirm Property Sale</h3>
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="text-lg font-semibold">
+              Confirm Property Sale
+            </h3>
 
-            <p className="text-sm text-gray-600 mt-2">
-              Are you sure you want to sell this property?
+            <p className="text-sm text-gray-600">
+              This action will mark the property as sold and
+              create sale records.
             </p>
 
-            <div className="flex justify-end gap-3 mt-6">
+            <div className="flex justify-end gap-3 pt-4">
               <button
                 onClick={() => setOpenConfirm(false)}
-                className="px-4 py-2 bg-gray-100 rounded-md"
+                className="px-4 py-2 text-sm bg-gray-100 rounded-md"
               >
                 Cancel
               </button>
@@ -246,7 +276,7 @@ export default function SellPropertyPage() {
               <button
                 onClick={submitSale}
                 disabled={loading}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md"
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md"
               >
                 {loading ? "Saving..." : "Confirm Sale"}
               </button>
@@ -257,3 +287,20 @@ export default function SellPropertyPage() {
     </div>
   );
 }
+
+/* ================= SMALL UI HELPERS ================= */
+
+const Field = ({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) => (
+  <div className="space-y-1">
+    <label className="text-sm font-medium text-gray-700">
+      {label}
+    </label>
+    {children}
+  </div>
+);

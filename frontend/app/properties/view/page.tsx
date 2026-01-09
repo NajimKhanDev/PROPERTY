@@ -212,6 +212,50 @@ export default function PropertyViewPage() {
         )}
       </div>
 
+
+      {/* ================= DOCUMENTS ================= */}
+      <div className="mt-6 bg-white rounded-xl shadow-sm p-6">
+        <h3 className="text-lg font-semibold mb-4">Documents</h3>
+
+        {property.documents?.length === 0 ? (
+          <p className="text-sm text-gray-500">No documents uploaded</p>
+        ) : (
+          <div className="space-y-6">
+
+            {/* Purchase / Inventory Docs */}
+            <div>
+              <h4 className="font-medium mb-2">Purchase / Inventory Documents</h4>
+
+              {property.documents.filter((d: any) => !d.sell_property_id).length === 0 ? (
+                <p className="text-sm text-gray-500">No purchase documents</p>
+              ) : (
+                <DocList
+                  docs={property.documents.filter(
+                    (d: any) => !d.sell_property_id
+                  )}
+                />
+              )}
+            </div>
+
+            {/* Sale Docs */}
+            <div>
+              <h4 className="font-medium mb-2">Sale Documents</h4>
+
+              {property.documents.filter((d: any) => d.sell_property_id).length === 0 ? (
+                <p className="text-sm text-gray-500">No sale documents</p>
+              ) : (
+                <DocList
+                  docs={property.documents.filter(
+                    (d: any) => d.sell_property_id
+                  )}
+                />
+              )}
+            </div>
+
+          </div>
+        )}
+      </div>
+
       {/* ================= MODAL ================= */}
       {openPayment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -327,3 +371,31 @@ const SummaryCard = ({
     </div>
   );
 };
+
+const DocList = ({ docs }: { docs: any[] }) => (
+  <div className="border rounded-lg divide-y">
+    {docs.map((doc) => (
+      <div
+        key={doc.id}
+        className="flex items-center justify-between p-3 hover:bg-gray-50"
+      >
+        <div>
+          <p className="font-medium">{doc.doc_name}</p>
+          <p className="text-xs text-gray-500">
+            Uploaded on{" "}
+            {new Date(doc.created_at).toLocaleDateString("en-IN")}
+          </p>
+        </div>
+
+        <a
+          href={`${process.env.NEXT_PUBLIC_IMAGE_BASE_URL}/${doc.doc_file}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-blue-600 hover:underline"
+        >
+          View / Download
+        </a>
+      </div>
+    ))}
+  </div>
+);
