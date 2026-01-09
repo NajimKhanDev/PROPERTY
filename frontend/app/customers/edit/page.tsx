@@ -48,7 +48,9 @@ export default function EditCustomerPage() {
         `${ProjectApi.all_customers}/${customerId}`
       );
 
-      const data = res.data?.data;
+      // console.log(res,"----------------->")
+      const data = res.data?.data?.profile;
+
       if (!data) return;
 
       setValue("name", data.name || "");

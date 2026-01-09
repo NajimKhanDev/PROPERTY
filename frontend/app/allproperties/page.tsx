@@ -125,7 +125,7 @@ export default function PropertiesPage() {
 
                   <td className="px-4 py-3">
                     <Link
-                      href={`/properties/view?id=${row.id}`}
+                      href={`/allproperties/view?id=${row.id}`}
                       className="text-blue-600 hover:underline"
                     >
                       View
