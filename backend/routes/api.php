@@ -10,7 +10,7 @@ use App\Http\Controllers\PropertyDocumentController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SellPropertyController;
-
+use App\Http\Controllers\DashboardController;
 
 // Auth routes
 
@@ -109,4 +109,6 @@ Route::get('/reports/properties/all', [App\Http\Controllers\PropertyReportContro
 
 // 2. Specific Property Detailed File
 Route::get('/reports/properties/{id}', [App\Http\Controllers\PropertyReportController::class, 'getSpecificPropertyReport']);
+
+Route::get('/dashboard', [DashboardController::class, 'getDashboardData']);
 });
