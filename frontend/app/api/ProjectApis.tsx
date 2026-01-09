@@ -4,6 +4,12 @@ export const ProjectApi = {
 
   // Roles
   login: `${BASE_URL}/login`,
+  register: "/register",
+  users: "/users",
+  userById: (id: number) => `/users/${id}`,
+
+  // all_customers: "/customers",
+  // create_customers: "/customers",
 
   // Customer 
   create_customers: `${BASE_URL}/customers`,
