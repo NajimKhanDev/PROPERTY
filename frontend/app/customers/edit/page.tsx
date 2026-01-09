@@ -1,10 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { useRouter } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import ProjectApi from "@/app/api/ProjectApis";
 import axiosInstance from "@/app/api/axiosInstance";
+import ProjectApi from "@/app/api/ProjectApis";
 
 type FormValues = {
   name: string;
@@ -14,26 +15,61 @@ type FormValues = {
   type: "buyer" | "seller" | "both";
   pan_number: string;
   aadhar_number: string;
-  pan_file: FileList;
-  aadhar_file: FileList;
+  pan_file?: FileList;
+  aadhar_file?: FileList;
 };
 
-export default function AddCustomerPage() {
+export default function EditCustomerPage() {
+  const searchParams = useSearchParams();
   const router = useRouter();
+  const customerId = searchParams.get("id");
 
   const {
     register,
     handleSubmit,
-    formState: { isSubmitting, errors },
+    setValue,
+    formState: { isSubmitting },
   } = useForm<FormValues>({
     defaultValues: {
       type: "buyer",
     },
   });
 
+  /* ================= FETCH CUSTOMER ================= */
+  useEffect(() => {
+    if (!customerId) return;
+    fetchCustomer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId]);
+
+  const fetchCustomer = async () => {
+    try {
+      const res = await axiosInstance.get(
+        `${ProjectApi.all_customers}/${customerId}`
+      );
+
+      const data = res.data?.data;
+      if (!data) return;
+
+      setValue("name", data.name || "");
+      setValue("email", data.email || "");
+      setValue("phone", data.phone || "");
+      setValue("address", data.address || "");
+      setValue("type", data.type?.toLowerCase() || "buyer");
+      setValue("pan_number", data.pan_number || "");
+      setValue("aadhar_number", data.aadhar_number || "");
+    } catch (error) {
+      console.error("Failed to load customer", error);
+    }
+  };
+
+  /* ================= UPDATE CUSTOMER ================= */
   const onSubmit = async (values: FormValues) => {
     try {
       const formData = new FormData();
+
+      // Laravel PUT spoofing
+      formData.append("_method", "PUT");
 
       formData.append("name", values.name);
       formData.append("email", values.email);
@@ -51,49 +87,51 @@ export default function AddCustomerPage() {
         formData.append("aadhar_file_path", values.aadhar_file[0]);
       }
 
-      await axiosInstance.post(ProjectApi.create_customers, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      await axiosInstance.post(
+        `${ProjectApi.all_customers}/${customerId}`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
 
-      router.push("/customers");
+      router.push(`/customers/view?id=${customerId}`);
     } catch (error) {
-      console.error(error);
-      alert("Failed to add customer");
+      console.error("Failed to update customer", error);
+      alert("Failed to update customer");
     }
   };
 
   const inputClass =
-    "w-full px-3 py-2 rounded-md border border-gray-200 bg-white text-sm " +
-    "focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300";
-
-  const errorText = "text-xs text-red-600 mt-1";
+    "w-full px-3 py-2 rounded-md border border-gray-300 " +
+    "focus:outline-none focus:ring-2 focus:ring-[#0070BB] focus:border-[#0070BB]";
 
   return (
     <div className="min-h-screen flex justify-center pt-12 px-4 text-black bg-gray-50">
       <div className="w-full max-w-2xl">
         {/* HEADER */}
         <div className="mb-6">
-          <Link
-            href="/customers"
+          <button
+            type="button"
+            onClick={() => router.back()}
             className="text-sm text-blue-600 hover:text-blue-800"
           >
-            ← Back to Customers
-          </Link>
+            ← Back
+          </button>
           <h1 className="text-2xl font-bold text-gray-800 mt-2 text-center">
-            Add New Customer
+            Edit Customer
           </h1>
         </div>
 
-        {/* FORM CARD */}
+        {/* FORM */}
         <div className="bg-white rounded-2xl shadow-md p-8">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 text-sm">
             {/* Name */}
             <div>
               <label className="block font-medium mb-1">Name</label>
-              <input {...register("name", { required: "Name is required" })} className={inputClass} />
-              {errors.name && <p className={errorText}>{errors.name.message}</p>}
+              <input {...register("name", { required: true })} className={inputClass} />
             </div>
 
             {/* Email */}
@@ -101,27 +139,15 @@ export default function AddCustomerPage() {
               <label className="block font-medium mb-1">Email</label>
               <input
                 type="email"
-                {...register("email", { required: "Email is required" })}
+                {...register("email", { required: true })}
                 className={inputClass}
               />
-              {errors.email && <p className={errorText}>{errors.email.message}</p>}
             </div>
 
             {/* Phone */}
             <div>
               <label className="block font-medium mb-1">Phone</label>
-              <input
-                {...register("phone", {
-                  required: "Phone number is required",
-                  pattern: {
-                    value: /^[0-9]{10}$/,
-                    message: "Phone number must be exactly 10 digits",
-                  },
-                })}
-                inputMode="numeric"
-                className={inputClass}
-              />
-              {errors.phone && <p className={errorText}>{errors.phone.message}</p>}
+              <input {...register("phone", { required: true })} className={inputClass} />
             </div>
 
             {/* Address */}
@@ -129,10 +155,9 @@ export default function AddCustomerPage() {
               <label className="block font-medium mb-1">Address</label>
               <textarea
                 rows={3}
-                {...register("address", { required: "Address is required" })}
+                {...register("address")}
                 className={inputClass}
               />
-              {errors.address && <p className={errorText}>{errors.address.message}</p>}
             </div>
 
             {/* Type */}
@@ -148,49 +173,33 @@ export default function AddCustomerPage() {
             {/* PAN */}
             <div>
               <label className="block font-medium mb-1">PAN Number</label>
-              <input
-                {...register("pan_number", { required: "PAN number is required" })}
-                className={inputClass}
-              />
-              {errors.pan_number && <p className={errorText}>{errors.pan_number.message}</p>}
+              <input {...register("pan_number")} className={inputClass} />
             </div>
 
             <div>
-              <label className="block font-medium mb-1">PAN File</label>
-              <input
-                type="file"
-                accept=".jpg,.jpeg,.png,.pdf"
-                {...register("pan_file", { required: "PAN file is required" })}
-                className="block w-full text-sm text-gray-600"
-              />
-              {errors.pan_file && <p className={errorText}>{errors.pan_file.message}</p>}
+              <label className="block font-medium mb-1">
+                PAN File (optional)
+              </label>
+              <input type="file" {...register("pan_file")} />
             </div>
 
             {/* Aadhaar */}
             <div>
               <label className="block font-medium mb-1">Aadhaar Number</label>
-              <input
-                {...register("aadhar_number", { required: "Aadhaar number is required" })}
-                className={inputClass}
-              />
-              {errors.aadhar_number && <p className={errorText}>{errors.aadhar_number.message}</p>}
+              <input {...register("aadhar_number")} className={inputClass} />
             </div>
 
             <div>
-              <label className="block font-medium mb-1">Aadhaar File</label>
-              <input
-                type="file"
-                accept=".jpg,.jpeg,.png,.pdf"
-                {...register("aadhar_file", { required: "Aadhaar file is required" })}
-                className="block w-full text-sm text-gray-600"
-              />
-              {errors.aadhar_file && <p className={errorText}>{errors.aadhar_file.message}</p>}
+              <label className="block font-medium mb-1">
+                Aadhaar File (optional)
+              </label>
+              <input type="file" {...register("aadhar_file")} />
             </div>
 
             {/* Actions */}
             <div className="flex gap-4 pt-4 justify-end">
               <Link
-                href="/customers"
+                href={`/customers/view?id=${customerId}`}
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-300"
               >
                 Cancel
@@ -199,9 +208,9 @@ export default function AddCustomerPage() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
+                className="px-4 py-2 bg-[#0070BB] text-white rounded-md text-sm font-medium hover:bg-[#005A99]"
               >
-                {isSubmitting ? "Saving..." : "Add Customer"}
+                {isSubmitting ? "Updating..." : "Update Customer"}
               </button>
             </div>
           </form>

@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function EditPropertyPage() {
-  const params = useParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const propertyId = params.id;
+  const propertyId = searchParams.get("id");
 
   const [formData, setFormData] = useState({
     title: "Modern Villa",
@@ -26,14 +26,14 @@ export default function EditPropertyPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log("Updating property:", propertyId, formData);
-    router.push(`/properties/${propertyId}`);
+    router.push(`/properties/view?id=${propertyId}`);
   };
 
   return (
     <div className="p-6 text-black">
       <div className="mb-6">
         <Link
-          href={`/properties/${propertyId}`}
+          href={`/properties/view?id=${propertyId}`}
           className="text-sm text-blue-600 hover:text-blue-800"
         >
           ← Back to Property
@@ -130,7 +130,7 @@ export default function EditPropertyPage() {
               Update Property
             </button>
             <Link
-              href={`/properties/${propertyId}`}
+              href={`/properties/view?id=${propertyId}`}
               className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-300"
             >
               Cancel
