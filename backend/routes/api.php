@@ -67,8 +67,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('property-docs/{id}', [PropertyDocumentController::class, 'destroy']);
 
     Route::get('/properties/ready-to-sell', [PropertyController::class, 'getReadyToSellProperties']);
+    
     Route::get('properties', [PropertyController::class, 'index']);
     Route::post('properties', [PropertyController::class, 'store']);
+    // Property Master Report
+Route::get('/properties/master-view/{id}', [PropertyController::class, 'getCompletePropertyDetails']);
     Route::get('properties/{id}', [PropertyController::class, 'show']);
     Route::put('properties/{id}', [PropertyController::class, 'update']);
     Route::delete('properties/{id}', [PropertyController::class, 'destroy']);
