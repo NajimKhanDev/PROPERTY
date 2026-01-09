@@ -11,42 +11,79 @@ interface SidebarLayoutProps {
 export default function SidebarLayout({ children }: SidebarLayoutProps) {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [userPermissions, setUserPermissions] = useState<any[]>([]);
+  const [userPermissions, setUserPermissions] = useState<string[]>([]);
 
-  /* ================= LOAD PERMISSIONS ================= */
+  /* ================= LOAD USER PERMISSIONS ================= */
   useEffect(() => {
-    const permissions = JSON.parse(
-      localStorage.getItem("permissions") || "[]"
-    );
-    setUserPermissions(permissions || []);
+    try {
+      const storedUser = JSON.parse(
+        localStorage.getItem("auth_user") || "{}"
+      );
+
+      const permissions: string[] =
+        storedUser?.role?.permissions || [];
+
+      setUserPermissions(permissions);
+    } catch (err) {
+      console.error("Failed to parse user from localStorage");
+      setUserPermissions([]);
+    }
   }, []);
 
   /* ================= PERMISSION CHECK ================= */
-  const hasReadPermission = (moduleName: string) => {
-    return userPermissions.some(
-      (p) => p.module === moduleName && p.read === true
-    );
+  const canRead = (permission: string) => {
+    return userPermissions.includes(permission);
   };
 
   /* ================= NAV ITEMS ================= */
   const navItems = [
-    { href: "/dashboard", label: "Dashboard", icon: "📊", module: "Dashboard" },
-    { href: "/roles", label: "Roles", icon: "🔐", module: "Manage Role" },
-    { href: "/customers", label: "Customers", icon: "👥", module: "Customers" },
-    { href: "/properties", label: "Properties", icon: "🏠", module: "Properties" },
-    { href: "/payments", label: "Payments", icon: "💳", module: "Payments" },
-    { href: "/reports", label: "Reports", icon: "📈", module: "Reports" },
+    {
+      href: "/dashboard",
+      label: "Dashboard",
+      icon: "📊",
+      permission: "dashboard.read",
+    },
+    {
+      href: "/roles",
+      label: "Roles",
+      icon: "🔐",
+      permission: "manage_role.read",
+    },
+    {
+      href: "/customers",
+      label: "Customers",
+      icon: "👥",
+      permission: "customers.read",
+    },
+    {
+      href: "/properties",
+      label: "Properties",
+      icon: "🏠",
+      permission: "properties.read",
+    },
+    {
+      href: "/payments",
+      label: "Payments",
+      icon: "💳",
+      permission: "payments.read",
+    },
+    {
+      href: "/reports",
+      label: "Reports",
+      icon: "📈",
+      permission: "reports.read",
+    },
   ];
 
   const visibleNavItems = navItems.filter((item) =>
-    hasReadPermission(item.module)
+    canRead(item.permission)
   );
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* Mobile overlay */}
+      {/* Mobile Overlay */}
       {isMobileMenuOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
@@ -64,7 +101,9 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
       >
         {/* Brand */}
         <div className="flex items-center justify-between p-4 lg:p-6 border-b border-white/20">
-          <h1 className="text-lg lg:text-xl font-bold">Property Bazaar</h1>
+          <h1 className="text-lg lg:text-xl font-bold">
+            Property Bazaar
+          </h1>
           <button
             onClick={closeMobileMenu}
             className="lg:hidden p-2 rounded-md text-white/80 hover:bg-white/10"
@@ -137,7 +176,9 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
         </div>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto bg-gray-100">{children}</main>
+        <main className="flex-1 overflow-auto bg-gray-100">
+          {children}
+        </main>
       </div>
     </div>
   );
