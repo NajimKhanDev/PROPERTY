@@ -312,16 +312,18 @@ class PropertyController extends Controller
         }
     }
     // Get 360-Degree Property View
+  // Get 360-Degree Property View (Split Ledger)
     public function getCompletePropertyDetails($id)
     {
-        // Fetch property with deep relationships
+        // 1. Fetch Data
         $property = Property::with([
-            'seller:id,name,phone,email',  // 1. Who sold to us (Vendor)
-            'documents',                   // 2. Inventory Documents
-            'transactions' => function($q) { // 3. All Money Flow
+            'seller:id,name,phone,email', 
+            'documents',
+            // Fetch ALL transactions linked to this property
+            'transactions' => function($q) { 
                 $q->where('is_deleted', 0)->latest('payment_date');
             },
-            'sell_deal' => function($q) {  // 4. Sale Details
+            'sell_deal' => function($q) { 
                 $q->with(['buyer:id,name,phone,email', 'documents'])
                   ->where('is_deleted', 0);
             }
@@ -330,13 +332,26 @@ class PropertyController extends Controller
         ->where('is_deleted', 0)
         ->firstOrFail();
 
-        // Calculations for Report
+        // 2. Separate Transactions
+        // Logic: 
+        // - Purchase Txn: Jisme sell_property_id NULL hai (Vendor ko diya)
+        // - Sale Txn: Jisme sell_property_id Available hai (Customer se aaya)
+        
+        $purchaseTxns = $property->transactions->filter(function($t) {
+            return $t->sell_property_id == null; 
+        })->values();
+
+        $saleTxns = $property->transactions->filter(function($t) {
+            return $t->sell_property_id != null;
+        })->values();
+
+        // 3. Calculations
         $purchaseCost = $property->total_amount;
         $saleRevenue  = $property->sell_deal->total_sale_amount ?? 0;
         $isSold       = ($property->status !== 'AVAILABLE');
         $profit       = $isSold ? ($saleRevenue - $purchaseCost) : 0;
 
-        // Custom Formatting
+        // 4. Response Structure
         $data = [
             'status' => true,
             'overview' => [
@@ -350,8 +365,8 @@ class PropertyController extends Controller
                 'purchase_cost' => $purchaseCost,
                 'sale_revenue'  => $isSold ? $saleRevenue : 'Not Sold',
                 'net_profit'    => $isSold ? $profit : 'N/A',
-                'vendor_due'    => $property->due_amount, // Humne dena hai
-                'customer_due'  => $property->sell_deal->pending_amount ?? 0 // Humne lena hai
+                'vendor_due'    => $property->due_amount,
+                'customer_due'  => $property->sell_deal->pending_amount ?? 0
             ],
             'parties' => [
                 'vendor' => $property->seller ?? null,
@@ -361,7 +376,11 @@ class PropertyController extends Controller
                 'inventory_docs' => $property->documents,
                 'sale_docs'      => $property->sell_deal->documents ?? []
             ],
-            'ledger' => $property->transactions // Transactions List
+            // SPLIT LEDGER
+            'ledger' => [
+                'purchase_history' => $purchaseTxns, // Paisa Gaya (Out)
+                'sale_history'     => $saleTxns      // Paisa Aaya (In)
+            ]
         ];
 
         return response()->json($data);
