@@ -6,6 +6,7 @@ import axiosInstance from "@/app/api/axiosInstance";
 const MODULES = [
   "Dashboard",
   "Manage Role",
+  "Manage Users",
   "Customers",
   "Properties",
   "Payments",

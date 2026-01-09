@@ -62,7 +62,7 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
       href: "/users",
       label: "Users",
       icon: Shield,
-      permission: "manage_role.read",
+      permission: "manage_users.read",
     },
     {
       href: "/customers",
