@@ -6,43 +6,45 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\PropertyController;
-use App\Http\Controllers\DocumentController;
-
-
+use App\Http\Controllers\PropertyDocumentController;
+use App\Http\Controllers\TransactionController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\SellPropertyController;
+use App\Http\Controllers\DashboardController;
 
 // Auth routes
 
 Route::post('/login', [UserController::class, 'login']);
-    Route::post('/register', [UserController::class, 'register']);
+Route::post('/register', [UserController::class, 'register']);
 
 // Protected Routes
 Route::middleware('auth:sanctum')->group(function () {
 
 
     Route::post('/change-password', [UserController::class, 'changePassword']);
-   // Logged-in user profile
+    // Logged-in user profile
     Route::get('/profile', [UserController::class, 'profile']);
 
     //  Users management
     Route::get('/users', [UserController::class, 'users']);
-    Route::get('/users/{id}',[UserController::class, 'profile']);
-    Route::put('/users/{id}', [UserController::class, 'updateUser']); 
-    Route::delete('/users/{id}', [UserController::class, 'deleteUser']); 
-    
+    Route::get('/users/{id}', [UserController::class, 'users']);
+    Route::put('/users/{id}', [UserController::class, 'updateUser']);
+    Route::delete('/users/{id}', [UserController::class, 'deleteUser']);
+
     // --- Role CRUD Routes ---
     Route::get('/roles', [RoleController::class, 'index']);
-        Route::post('/roles', [RoleController::class, 'store']);
+    Route::post('/roles', [RoleController::class, 'store']);
     Route::get('/roles/{role}', [RoleController::class, 'show']);
     Route::put('/roles/{role}', [RoleController::class, 'update']);
     Route::delete('/roles/{role}', [RoleController::class, 'destroy']);
 
-// --- Soft Delete Extensions ---
-Route::get('/roles/trash', [RoleController::class, 'trashed']);   
-Route::patch('/roles/restore/{id}', [RoleController::class, 'restore']); 
+    // --- Soft Delete Extensions ---
+    Route::get('/roles/trash', [RoleController::class, 'trashed']);
+    Route::patch('/roles/restore/{id}', [RoleController::class, 'restore']);
 
 
 
-// Custom routes
+    // Custom routes
     Route::get('customers/trash', [CustomerController::class, 'trash']);
     Route::post('customers/{id}/restore', [CustomerController::class, 'restore']);
 
@@ -53,23 +55,65 @@ Route::patch('/roles/restore/{id}', [RoleController::class, 'restore']);
     Route::get('/customers/{id}', [CustomerController::class, 'show']);
     Route::delete('/customers/{id}', [CustomerController::class, 'destroy']);
 
-//Documents
-// Trash & Restore
+    //Documents
+    // Trash & Restore
     Route::get('property-docs/trash', [PropertyDocumentController::class, 'trash']); // ?property_id=1
     Route::post('property-docs/{id}/restore', [PropertyDocumentController::class, 'restore']);
 
     // Standard CRUD
+
     Route::get('property-docs', [PropertyDocumentController::class, 'index']); // ?property_id=1
     Route::post('property-docs', [PropertyDocumentController::class, 'store']);
     Route::delete('property-docs/{id}', [PropertyDocumentController::class, 'destroy']);
 
-    Route::get('properties',[PropertyController::class, 'index']);
-    Route::post('properties',[PropertyController::class, 'store']);
-    Route::get('properties/{id}',[PropertyController::class, 'show']);
-    Route::put('properties/{id}',[PropertyController::class, 'update']);
-    Route::delete('properties/{id}',[PropertyController::class, 'destroy']);
+    Route::get('/properties/ready-to-sell', [PropertyController::class, 'getReadyToSellProperties']);
+    
+    Route::get('properties', [PropertyController::class, 'index']);
+    Route::post('properties', [PropertyController::class, 'store']);
+    // Property Master Report
+Route::get('/properties/master-view/{id}', [PropertyController::class, 'getCompletePropertyDetails']);
+    Route::get('properties/{id}', [PropertyController::class, 'show']);
+    Route::put('properties/{id}', [PropertyController::class, 'update']);
+    Route::delete('properties/{id}', [PropertyController::class, 'destroy']);
+
+    //Transactions
+    Route::get('/transactions/all', [TransactionController::class, 'getAllTransactions']);
+    Route::get('/transactions', [TransactionController::class, 'index']);
+    Route::post('/transactions', [TransactionController::class, 'store']);
+    Route::get('/transactions/{id}', [TransactionController::class, 'show']);
+    Route::put('/transactions/{id}', [TransactionController::class, 'update']);
+    Route::delete('/transactions/{id}', [TransactionController::class, 'destroy']);
 
 
+    //Transactions for sell property
+    Route::get('/transactions/sell-deal/{id}', [TransactionController::class, 'getTransactionsByPropertyId']);
+    //Report
+    Route::get('/reports/dashboard', [ReportController::class, 'getDashboardStats']);
+    Route::get('/reports/daybook', [ReportController::class, 'getDaybook']);
+    Route::get('/reports/dues', [ReportController::class, 'getDuesReport']);
+    Route::get('/reports/sales-performance', [ReportController::class, 'getProfitLoss']);
+    Route::get('/reports/charts/monthly', [ReportController::class, 'getMonthlyTrend']);
 
+    //Sell Property
+    // Route::apiResource('sell-properties', SellPropertyController::class);
+    Route::get('/sell-properties', [SellPropertyController::class, 'index']);
+    Route::post('/sell-properties', [SellPropertyController::class, 'store']);
+    Route::get('/sell-properties/{id}', [SellPropertyController::class, 'show']);
+    Route::put('/sell-properties/{id}', [SellPropertyController::class, 'update']);
+    Route::delete('/sell-properties/{id}', [SellPropertyController::class, 'destroy']);
 
+    // 1. List of All Customers with Summary
+    Route::get('/reports/customers/all', [App\Http\Controllers\CustomerReportController::class, 'getAllCustomersReport']);
+
+    // 2. Detailed Report for One Customer
+
+    Route::get('/reports/customers/{id}', [App\Http\Controllers\CustomerReportController::class, 'getSpecificCustomerReport']);
+
+    // 1. Master List of Properties with Profit/Status
+    Route::get('/reports/properties/all', [App\Http\Controllers\PropertyReportController::class, 'getAllPropertiesReport']);
+
+// 2. Specific Property Detailed File
+Route::get('/reports/properties/{id}', [App\Http\Controllers\PropertyReportController::class, 'getSpecificPropertyReport']);
+
+Route::get('/dashboard', [DashboardController::class, 'getDashboardData']);
 });

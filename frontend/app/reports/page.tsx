@@ -1,287 +1,387 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from "react";
+import axiosInstance from "@/app/api/axiosInstance";
 
-interface ReportData {
-  totalCustomers: number;
-  totalProperties: number;
-  totalPayments: number;
-  totalRevenue: number;
-  monthlyRevenue: { month: string; amount: number }[];
-  propertyTypes: { type: string; count: number }[];
-  customerTypes: { type: string; count: number }[];
-  recentTransactions: {
-    id: number;
-    property: string;
-    customer: string;
-    amount: number;
-    date: string;
-    type: string;
-  }[];
-}
+type Tab = "customers" | "properties" | "transactions";
+
+/* ================= TAILWIND INPUT STYLES ================= */
+const inputClass =
+  "h-9 px-3 rounded-md border border-gray-200 bg-white text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300";
+
+const selectClass =
+  "h-9 px-3 rounded-md border border-gray-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300";
+
+const buttonClass =
+  "h-9 px-4 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition";
 
 export default function ReportsPage() {
-  const [selectedReport, setSelectedReport] = useState<'overview' | 'customers' | 'properties' | 'payments'>('overview');
+  const [tab, setTab] = useState<Tab>("properties");
+  const [loading, setLoading] = useState(false);
 
-  // Mock data
-  const reportData: ReportData = {
-    totalCustomers: 25,
-    totalProperties: 15,
-    totalPayments: 42,
-    totalRevenue: 2500000,
-    monthlyRevenue: [
-      { month: 'Jan', amount: 450000 },
-      { month: 'Feb', amount: 380000 },
-      { month: 'Mar', amount: 520000 },
-      { month: 'Apr', amount: 610000 },
-      { month: 'May', amount: 540000 }
-    ],
-    propertyTypes: [
-      { type: 'Residential', count: 12 },
-      { type: 'Commercial', count: 3 }
-    ],
-    customerTypes: [
-      { type: 'Buyer', count: 15 },
-      { type: 'Seller', count: 8 },
-      { type: 'Both', count: 2 }
-    ],
-    recentTransactions: [
-      { id: 1, property: 'Modern Villa', customer: 'John Doe', amount: 150000, date: '2024-01-20', type: 'Payment' },
-      { id: 2, property: 'Downtown Apartment', customer: 'Jane Smith', amount: 75000, date: '2024-01-18', type: 'Payment' },
-      { id: 3, property: 'Office Complex', customer: 'Bob Wilson', amount: 200000, date: '2024-01-15', type: 'Sale' }
-    ]
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [properties, setProperties] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
+
+  /* ================= CUSTOMER FILTERS ================= */
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerType, setCustomerType] =
+    useState<"" | "BUYER" | "SELLER" | "BOTH">("");
+  const [customerPage, setCustomerPage] = useState(1);
+
+  /* ================= PROPERTY FILTERS ================= */
+  const [propertySearch, setPropertySearch] = useState("");
+  const [propertyStatus, setPropertyStatus] = useState("");
+  const [propertyCategory, setPropertyCategory] = useState("");
+  const [propertyPage, setPropertyPage] = useState(1);
+
+  /* ================= TRANSACTION FILTERS ================= */
+  const [txnType, setTxnType] = useState("");
+  const [paymentMode, setPaymentMode] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [minAmount, setMinAmount] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
+  const [txnSearch, setTxnSearch] = useState("");
+  const [sortBy, setSortBy] = useState("payment_date");
+  const [sortOrder, setSortOrder] = useState("desc");
+  const [txnPage, setTxnPage] = useState(1);
+  const perPage = 10;
+
+  /* ================= TAB BASED FETCH ================= */
+  useEffect(() => {
+    if (tab === "customers") fetchCustomers();
+    if (tab === "properties") fetchProperties();
+    if (tab === "transactions") fetchTransactions();
+  }, [tab]);
+
+  /* ================= API CALLS ================= */
+  const fetchCustomers = async () => {
+    try {
+      setLoading(true);
+      const res = await axiosInstance.get("/reports/customers/all", {
+        params: {
+          search: customerSearch || undefined,
+          type: customerType || undefined,
+          page: customerPage,
+        },
+      });
+      setCustomers(res.data?.data || []);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const renderOverview = () => (
-    <div className="space-y-6">
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Total Customers</h3>
-          <p className="text-3xl font-bold text-blue-600">{reportData.totalCustomers}</p>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Total Properties</h3>
-          <p className="text-3xl font-bold text-green-600">{reportData.totalProperties}</p>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Total Payments</h3>
-          <p className="text-3xl font-bold text-purple-600">{reportData.totalPayments}</p>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Total Revenue</h3>
-          <p className="text-3xl font-bold text-red-600">${reportData.totalRevenue.toLocaleString()}</p>
-        </div>
-      </div>
+  const fetchProperties = async () => {
+    try {
+      setLoading(true);
+      const res = await axiosInstance.get("/reports/properties/all", {
+        params: {
+          search: propertySearch || undefined,
+          status: propertyStatus || undefined,
+          category: propertyCategory || undefined,
+          page: propertyPage,
+        },
+      });
+      setProperties(res.data?.data || []);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">Monthly Revenue</h3>
-          <div className="space-y-2">
-            {reportData.monthlyRevenue.map((item) => (
-              <div key={item.month} className="flex justify-between items-center">
-                <span>{item.month}</span>
-                <span className="font-medium">${item.amount.toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">Property Types</h3>
-          <div className="space-y-2">
-            {reportData.propertyTypes.map((item) => (
-              <div key={item.type} className="flex justify-between items-center">
-                <span>{item.type}</span>
-                <span className="font-medium">{item.count}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Transactions */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b">
-          <h3 className="text-lg font-semibold">Recent Transactions</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Property</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {reportData.recentTransactions.map((transaction) => (
-                <tr key={transaction.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    {new Date(transaction.date).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">{transaction.property}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{transaction.customer}</td>
-                  <td className="px-6 py-4 whitespace-nowrap font-medium text-green-600">
-                    ${transaction.amount.toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      transaction.type === 'Sale' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                    }`}>
-                      {transaction.type}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderCustomerReport = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {reportData.customerTypes.map((item) => (
-          <div key={item.type} className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-sm font-medium text-gray-500">{item.type} Customers</h3>
-            <p className="text-3xl font-bold text-blue-600">{item.count}</p>
-          </div>
-        ))}
-      </div>
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h3 className="text-lg font-semibold mb-4">Customer Distribution</h3>
-        <div className="space-y-4">
-          {reportData.customerTypes.map((item) => (
-            <div key={item.type}>
-              <div className="flex justify-between mb-1">
-                <span>{item.type}</span>
-                <span>{Math.round((item.count / reportData.totalCustomers) * 100)}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full" 
-                  style={{ width: `${(item.count / reportData.totalCustomers) * 100}%` }}
-                ></div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderPropertyReport = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {reportData.propertyTypes.map((item) => (
-          <div key={item.type} className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-sm font-medium text-gray-500">{item.type} Properties</h3>
-            <p className="text-3xl font-bold text-green-600">{item.count}</p>
-          </div>
-        ))}
-      </div>
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h3 className="text-lg font-semibold mb-4">Property Type Distribution</h3>
-        <div className="space-y-4">
-          {reportData.propertyTypes.map((item) => (
-            <div key={item.type}>
-              <div className="flex justify-between mb-1">
-                <span>{item.type}</span>
-                <span>{Math.round((item.count / reportData.totalProperties) * 100)}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-green-600 h-2 rounded-full" 
-                  style={{ width: `${(item.count / reportData.totalProperties) * 100}%` }}
-                ></div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderPaymentReport = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Total Payments</h3>
-          <p className="text-3xl font-bold text-purple-600">{reportData.totalPayments}</p>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Average Payment</h3>
-          <p className="text-3xl font-bold text-purple-600">
-            ${Math.round(reportData.totalRevenue / reportData.totalPayments).toLocaleString()}
-          </p>
-        </div>
-      </div>
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h3 className="text-lg font-semibold mb-4">Monthly Revenue Trend</h3>
-        <div className="space-y-4">
-          {reportData.monthlyRevenue.map((item) => (
-            <div key={item.month}>
-              <div className="flex justify-between mb-1">
-                <span>{item.month}</span>
-                <span>${item.amount.toLocaleString()}</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-purple-600 h-2 rounded-full" 
-                  style={{ width: `${(item.amount / Math.max(...reportData.monthlyRevenue.map(r => r.amount))) * 100}%` }}
-                ></div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+  const fetchTransactions = async () => {
+    try {
+      setLoading(true);
+      const res = await axiosInstance.get("/transactions/all", {
+        params: {
+          type: txnType || undefined,
+          payment_mode: paymentMode || undefined,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          min_amount: minAmount || undefined,
+          max_amount: maxAmount || undefined,
+          search: txnSearch || undefined,
+          sort_by: sortBy,
+          sort_order: sortOrder,
+          page: txnPage,
+          per_page: perPage,
+        },
+      });
+      setTransactions(res.data?.data?.data || []);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="p-6 text-black">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Reports & Analytics</h1>
-        <p className="text-gray-600 mt-1">Comprehensive insights into your property business</p>
+    <div className="p-6 space-y-6 bg-gray-50 min-h-screen text-gray-900">
+      {/* ================= HEADER ================= */}
+      <div>
+        <h1 className="text-2xl font-semibold">Reports</h1>
+        <p className="text-sm text-gray-500">
+          Customers, Properties & Transaction Analytics
+        </p>
       </div>
 
-      {/* Report Navigation */}
-      <div className="mb-6">
-        <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8">
-            {[
-              { key: 'overview', label: 'Overview' },
-              { key: 'customers', label: 'Customers' },
-              { key: 'properties', label: 'Properties' },
-              { key: 'payments', label: 'Payments' }
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setSelectedReport(tab.key as any)}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  selectedReport === tab.key
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                {tab.label}
-              </button>
+      {/* ================= TABS ================= */}
+      <div className="flex gap-6 border-b border-gray-200">
+        {["properties", "transactions","customers"].map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t as Tab)}
+            className={`pb-2 text-sm font-medium ${
+              tab === t
+                ? "text-blue-600 border-b-2 border-blue-600"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {loading && <div className="text-sm text-gray-500">Loading...</div>}
+
+      {/* ================= CUSTOMERS ================= */}
+      {tab === "customers" && !loading && (
+        <>
+          <div className="flex flex-wrap gap-3 bg-white p-4 rounded-lg border border-gray-100">
+            <input
+              className={inputClass}
+              placeholder="Search name / phone"
+              value={customerSearch}
+              onChange={(e) => setCustomerSearch(e.target.value)}
+            />
+            <select
+              className={selectClass}
+              value={customerType}
+              onChange={(e) => setCustomerType(e.target.value as any)}
+            >
+              <option value="">All Types</option>
+              <option value="BUYER">Buyer</option>
+              <option value="SELLER">Seller</option>
+              <option value="BOTH">Both</option>
+            </select>
+            <button className={buttonClass} onClick={fetchCustomers}>
+              Apply
+            </button>
+          </div>
+
+          <CardTable
+            headers={[
+              "Name",
+              "Phone",
+              "Type",
+              "Bought",
+              "Sold",
+              "Recoverable",
+              "Payable",
+            ]}
+          >
+            {customers.map((c) => (
+              <Row key={c.id}>
+                <Cell>{c.name}</Cell>
+                <Cell>{c.phone}</Cell>
+                <Cell>{c.type}</Cell>
+                <Cell align="right">₹{Number(c.total_bought).toLocaleString("en-IN")}</Cell>
+                <Cell align="right">₹{Number(c.total_sold).toLocaleString("en-IN")}</Cell>
+                <Cell align="right" className="text-red-600">
+                  ₹{Number(c.recoverable).toLocaleString("en-IN")}
+                </Cell>
+                <Cell align="right" className="text-orange-600">
+                  ₹{Number(c.payable).toLocaleString("en-IN")}
+                </Cell>
+              </Row>
             ))}
-          </nav>
-        </div>
-      </div>
+          </CardTable>
+        </>
+      )}
 
-      {/* Report Content */}
-      {selectedReport === 'overview' && renderOverview()}
-      {selectedReport === 'customers' && renderCustomerReport()}
-      {selectedReport === 'properties' && renderPropertyReport()}
-      {selectedReport === 'payments' && renderPaymentReport()}
+      {/* ================= PROPERTIES ================= */}
+      {tab === "properties" && !loading && (
+        <>
+          <div className="flex flex-wrap gap-3 bg-white p-4 rounded-lg border border-gray-100">
+            <input
+              className={inputClass}
+              placeholder="Search title / invoice / party"
+              value={propertySearch}
+              onChange={(e) => setPropertySearch(e.target.value)}
+            />
+            <select
+              className={selectClass}
+              value={propertyStatus}
+              onChange={(e) => setPropertyStatus(e.target.value)}
+            >
+              <option value="">All Status</option>
+              <option value="AVAILABLE">Available</option>
+              <option value="SOLD">Sold</option>
+              <option value="BOOKED">Booked</option>
+            </select>
+            <input
+              className={inputClass}
+              placeholder="Category"
+              value={propertyCategory}
+              onChange={(e) => setPropertyCategory(e.target.value)}
+            />
+            <button className={buttonClass} onClick={fetchProperties}>
+              Apply
+            </button>
+          </div>
+
+          <CardTable
+            headers={[
+              "Property",
+              "Category",
+              "Status",
+              "Purchase",
+              "Sale",
+              "Profit / Loss",
+              "Margin",
+            ]}
+          >
+            {properties.map((p) => (
+              <Row key={p.id}>
+                <Cell>{p.title}</Cell>
+                <Cell>{p.category}</Cell>
+                <Cell>{p.status}</Cell>
+                <Cell align="right">₹{Number(p.cost_price).toLocaleString("en-IN")}</Cell>
+                <Cell align="right">₹{Number(p.sale_price).toLocaleString("en-IN")}</Cell>
+                <Cell
+                  align="right"
+                  className={
+                    Number(p.profit_loss) >= 0
+                      ? "text-green-600"
+                      : "text-red-600"
+                  }
+                >
+                  ₹{Number(p.profit_loss).toLocaleString("en-IN")}
+                </Cell>
+                <Cell>{p.margin_pct}</Cell>
+              </Row>
+            ))}
+          </CardTable>
+        </>
+      )}
+
+      {/* ================= TRANSACTIONS ================= */}
+      {tab === "transactions" && !loading && (
+        <>
+          <div className="flex flex-wrap gap-3 bg-white p-4 rounded-lg border border-gray-100">
+            <select className={selectClass} value={txnType} onChange={(e) => setTxnType(e.target.value)}>
+              <option value="">All Types</option>
+              <option value="CREDIT">Credit</option>
+              <option value="DEBIT">Debit</option>
+            </select>
+
+            <select
+              className={selectClass}
+              value={paymentMode}
+              onChange={(e) => setPaymentMode(e.target.value)}
+            >
+              <option value="">Payment Mode</option>
+              <option value="CASH">Cash</option>
+              <option value="UPI">UPI</option>
+              <option value="BANK">Bank</option>
+            </select>
+
+            <input type="date" className={inputClass} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            <input type="date" className={inputClass} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+
+            <input
+              className={inputClass}
+              placeholder="Min Amount"
+              value={minAmount}
+              onChange={(e) => setMinAmount(e.target.value)}
+            />
+            <input
+              className={inputClass}
+              placeholder="Max Amount"
+              value={maxAmount}
+              onChange={(e) => setMaxAmount(e.target.value)}
+            />
+            <input
+              className={inputClass}
+              placeholder="Search"
+              value={txnSearch}
+              onChange={(e) => setTxnSearch(e.target.value)}
+            />
+            <button className={buttonClass} onClick={fetchTransactions}>
+              Apply
+            </button>
+          </div>
+
+          <CardTable
+            headers={["Date", "Property", "Party", "Type", "Mode", "Amount"]}
+          >
+            {transactions.map((t) => (
+              <Row key={t.id}>
+                <Cell>{t.payment_date?.slice(0, 10)}</Cell>
+                <Cell>{t.property?.title || "-"}</Cell>
+                <Cell>
+                  {t.type === "CREDIT"
+                    ? t.sale_deal?.buyer?.name || "-"
+                    : t.property?.seller?.name || "-"}
+                </Cell>
+                <Cell>{t.type}</Cell>
+                <Cell>{t.payment_mode}</Cell>
+                <Cell
+                  align="right"
+                  className={t.type === "CREDIT" ? "text-green-600" : "text-red-600"}
+                >
+                  ₹{Number(t.amount).toLocaleString("en-IN")}
+                </Cell>
+              </Row>
+            ))}
+          </CardTable>
+        </>
+      )}
     </div>
   );
 }
+
+/* ================= UI HELPERS ================= */
+
+const CardTable = ({
+  headers,
+  children,
+}: {
+  headers: string[];
+  children: React.ReactNode;
+}) => (
+  <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+    <table className="w-full text-sm">
+      <thead className="bg-gray-50">
+        <tr>
+          {headers.map((h) => (
+            <th key={h} className="px-4 py-3 text-left font-medium text-gray-500">
+              {h}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>{children}</tbody>
+    </table>
+  </div>
+);
+
+const Row = ({ children }: { children: React.ReactNode }) => (
+  <tr className="border-t border-gray-100 hover:bg-gray-50">{children}</tr>
+);
+
+const Cell = ({
+  children,
+  align = "left",
+  className = "",
+}: {
+  children: React.ReactNode;
+  align?: "left" | "right";
+  className?: string;
+}) => (
+  <td
+    className={`px-4 py-3 ${
+      align === "right" ? "text-right" : ""
+    } ${className}`}
+  >
+    {children}
+  </td>
+);

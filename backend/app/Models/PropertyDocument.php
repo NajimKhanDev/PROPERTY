@@ -10,21 +10,27 @@ class PropertyDocument extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['property_id', 'doc_name', 'doc_file', 'is_deleted'];
+    protected $fillable = ['property_id', 'sell_property_id', 'doc_name', 'doc_file', 'is_deleted'];
 
-    // Global Scope: Hide deleted
+    // Active scope
     protected static function booted()
     {
         static::addGlobalScope('active', fn (Builder $builder) => $builder->where('is_deleted', 0));
     }
 
-    // Link back to property
+    // Inventory relation
     public function property()
     {
         return $this->belongsTo(Property::class);
     }
 
-    // Auto get URL
+    // Sale relation
+    public function sale_deal()
+    {
+        return $this->belongsTo(SellProperty::class, 'sell_property_id');
+    }
+
+    // File URL
     public function getDocFileUrlAttribute()
     {
         return url('storage/' . $this->doc_file);

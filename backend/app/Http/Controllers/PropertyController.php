@@ -3,149 +3,386 @@
 namespace App\Http\Controllers;
 
 use App\Models\Property;
+use App\Models\Transaction;
+use App\Models\PropertyDocument;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class PropertyController extends Controller
 {
-    // GET: List all active properties
+    // List properties with filters
     public function index(Request $request)
     {
-        $query = Property::where('is_deleted', 0)->latest('date');
+        // 1. Base Query
+        $query = Property::with(['seller:id,name,phone', 'buyer:id,name,phone'])
+                         ->where('is_deleted', 0);
 
-        if ($request->filled('type')) {
-            $query->where('transaction_type', $request->type);
+        // 2. Filter: Transaction Type
+        if ($request->filled('transaction_type')) {
+            $query->where('transaction_type', $request->transaction_type);
         }
 
+        // 3. Filter: Status
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // 4. Filter: Category
+        if ($request->filled('category')) {
+            $query->where('category', $request->category);
+        }
+
+        // 5. Filter: Date Range
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $query->whereBetween('date', [$request->start_date, $request->end_date]);
+        }
+
+        // 6. Global Search
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
-                $q->where('party_name', 'like', "%{$search}%")
-                  ->orWhere('title', 'like', "%{$search}%")
-                  ->orWhere('invoice_no', 'like', "%{$search}%");
+                $q->where('title', 'like', "%{$search}%")
+                  ->orWhere('invoice_no', 'like', "%{$search}%")
+                  ->orWhereHas('seller', fn($s) => $s->where('name', 'like', "%{$search}%"))
+                  ->orWhereHas('buyer', fn($b) => $b->where('name', 'like', "%{$search}%"));
             });
         }
 
-        $properties = $query->paginate(10);
-
-        return response()->json($properties);
+        // 7. Sort and Paginate
+        $query->orderBy($request->input('sort_by', 'date'), $request->input('sort_order', 'desc'));
+        
+        return response()->json($query->paginate($request->input('per_page', 10)));
     }
 
-    // POST: Create a new property
+    // Create Inventory (PURCHASE ONLY)
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'transaction_type' => 'required|in:PURCHASE,SELL',
-            'party_name'       => 'required|string|max:255',
+        // Validate Purchase Input
+        $request->validate([
+            'transaction_type' => 'required|in:PURCHASE', // Strict: Purchase only
+            'seller_id'        => 'required|exists:customers,id', // Vendor required
             'title'            => 'required|string|max:255',
             'category'         => 'required|in:LAND,FLAT,HOUSE,COMMERCIAL,AGRICULTURE',
             'quantity'         => 'required|integer|min:1',
             'rate'             => 'required|numeric|min:0',
+            'invoice_no'       => 'nullable|string|max:50',
+            'paid_amount'      => 'nullable|numeric|min:0',
+            'documents'        => 'nullable|array',
+            'documents.*'      => 'file|mimes:jpg,jpeg,png,pdf|max:10240'
         ]);
 
-        // Calculations
-        $quantity      = $request->input('quantity', 1);
-        $rate          = $request->input('rate', 0);
-        $baseAmount    = $quantity * $rate;
-        
-        $gstPercent    = $request->input('gst_percentage', 0);
-        $gstAmount     = ($gstPercent > 0) ? ($baseAmount * ($gstPercent / 100)) : 0;
-        
-        $otherExpenses = $request->input('other_expenses', 0);
-        $totalAmount   = $baseAmount + $gstAmount + $otherExpenses;
-        
-        $paidAmount    = $request->input('paid_amount', 0);
-        $dueAmount     = $totalAmount - $paidAmount;
+        DB::beginTransaction();
 
-        // Prepare Data
-        $data = $request->except(['_token']); 
-        $data['base_amount']  = $baseAmount;
-        $data['gst_amount']   = $gstAmount;
-        $data['total_amount'] = $totalAmount;
-        $data['due_amount']   = $dueAmount;
-        $data['is_deleted']   = 0;
+        try {
+            // Calculate Financials
+            $quantity   = $request->input('quantity', 1);
+            $rate       = $request->input('rate', 0);
+            $baseAmount = $quantity * $rate;
+            
+            $gstPercent = $request->input('gst_percentage', 0);
+            $gstAmount  = ($gstPercent > 0) ? ($baseAmount * ($gstPercent / 100)) : 0;
+            
+            $other      = $request->input('other_expenses', 0);
+            $total      = $baseAmount + $gstAmount + $other;
+            
+            $paid       = $request->input('paid_amount', 0);
+            $due        = $total - $paid;
+            $date       = $request->filled('date') ? $request->date : now();
 
-        if (!$request->filled('date')) {
-            $data['date'] = now();
+            // 1. Create Property (Inventory)
+            $property = Property::create([
+                'seller_id'        => $request->seller_id, 
+                'buyer_id'         => null, // No buyer yet
+                'transaction_type' => 'PURCHASE', // Always Purchase
+                'title'            => $request->title,
+                'category'         => $request->category,
+                'date'             => $date,
+                'invoice_no'       => $request->invoice_no,
+                'quantity'         => $quantity,
+                'rate'             => $rate,
+                'base_amount'      => $baseAmount,
+                'gst_percentage'   => $gstPercent,
+                'gst_amount'       => $gstAmount,
+                'other_expenses'   => $other,
+                'total_amount'     => $total,
+                'paid_amount'      => $paid,
+                'due_amount'       => $due,
+                'status'           => 'AVAILABLE', // Always Available initially
+                'is_deleted'       => 0
+            ]);
+
+            // 2. Create Debit Transaction (Expense)
+            if ($paid > 0) {
+                Transaction::create([
+                    'property_id'      => $property->id,
+                    'sell_property_id' => null, 
+                    'type'             => 'DEBIT', // Money Out
+                    'amount'           => $paid,
+                    'payment_date'     => $request->input('payment_date', $date),
+                    'payment_mode'     => $request->input('payment_mode', 'CASH'),
+                    'reference_no'     => $request->invoice_no ?? 'TXN-' . time(),
+                    'remarks'          => 'Initial purchase payment',
+                    'is_deleted'       => 0
+                ]);
+            }
+
+            // 3. Upload Documents
+            if ($request->hasFile('documents')) {
+                foreach ($request->file('documents') as $file) {
+                    $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
+                    $filePath = $file->storeAs("uploads/properties/{$property->id}", $filename, 'public');
+
+                    PropertyDocument::create([
+                        'property_id' => $property->id,
+                        'doc_name'    => $file->getClientOriginalName(),
+                        'doc_file'    => $filePath,
+                        'is_deleted'  => 0
+                    ]);
+                }
+            }
+
+            DB::commit();
+            return response()->json([
+                'message' => 'Inventory created successfully',
+                'data'    => $property->load(['seller', 'documents'])
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Error: ' . $e->getMessage()], 500);
         }
-
-        $property = Property::create($data);
-
-        return response()->json(['message' => 'Created successfully', 'data' => $property], 201);
     }
 
-    // GET: Show single property
+    // Show Property Details
     public function show($id)
     {
-        $property = Property::with('documents')
-                    ->where('id', $id)
-                    ->where('is_deleted', 0)
-                    ->firstOrFail();
+        $property = Property::with(['documents', 'seller', 'buyer'])
+                            ->where('id', $id)
+                            ->where('is_deleted', 0)
+                            ->firstOrFail();
 
         return response()->json($property);
     }
 
-    // PUT/PATCH: Update property
+    // Update Property Details
     public function update(Request $request, $id)
     {
         $property = Property::where('id', $id)->where('is_deleted', 0)->firstOrFail();
 
-        // Calculations for update
-        $quantity      = $request->input('quantity', $property->quantity);
-        $rate          = $request->input('rate', $property->rate);
-        $baseAmount    = $quantity * $rate;
+        // Validate Update
+        $request->validate([
+             'seller_id' => 'nullable|exists:customers,id', // Only update seller
+             'documents' => 'nullable|array'
+        ]);
 
-        $gstPercent    = $request->input('gst_percentage', $property->gst_percentage ?? 0);
-        $gstAmount     = ($gstPercent > 0) ? ($baseAmount * ($gstPercent / 100)) : 0;
+        DB::beginTransaction();
+        try {
+            // Update Vendor if needed
+            if ($request->filled('seller_id')) {
+                $property->seller_id = $request->seller_id;
+            }
 
-        $otherExpenses = $request->input('other_expenses', $property->other_expenses ?? 0);
-        $totalAmount   = $baseAmount + $gstAmount + $otherExpenses;
+            // Recalculate Financials
+            $quantity   = $request->input('quantity', $property->quantity);
+            $rate       = $request->input('rate', $property->rate);
+            $baseAmount = $quantity * $rate;
 
-        $paidAmount    = $request->input('paid_amount', $property->paid_amount ?? 0);
-        $dueAmount     = $totalAmount - $paidAmount;
+            $gstPercent = $request->input('gst_percentage', $property->gst_percentage ?? 0);
+            $gstAmount  = ($gstPercent > 0) ? ($baseAmount * ($gstPercent / 100)) : 0;
+            $other      = $request->input('other_expenses', $property->other_expenses ?? 0);
+            $total      = $baseAmount + $gstAmount + $other;
 
-        // Update Data
-        $data = $request->except(['_token']);
-        $data['base_amount']  = $baseAmount;
-        $data['gst_amount']   = $gstAmount;
-        $data['total_amount'] = $totalAmount;
-        $data['due_amount']   = $dueAmount;
+            $paid       = $property->paid_amount; 
+            $due        = $total - $paid;
 
-        $property->update($data);
+            // Update Fields
+            $data = $request->except(['_token', 'documents', 'paid_amount', 'buyer_id']);
+            $data['base_amount']  = $baseAmount;
+            $data['gst_amount']   = $gstAmount;
+            $data['total_amount'] = $total;
+            $data['due_amount']   = $due;
 
-        return response()->json(['message' => 'Updated successfully', 'data' => $property]);
+            $property->update($data);
+
+            // Upload New Documents
+            if ($request->hasFile('documents')) {
+                foreach ($request->file('documents') as $file) {
+                    $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
+                    $filePath = $file->storeAs("uploads/properties/{$property->id}", $filename, 'public');
+
+                    PropertyDocument::create([
+                        'property_id' => $property->id,
+                        'doc_name'    => $file->getClientOriginalName(),
+                        'doc_file'    => $filePath,
+                        'is_deleted'  => 0
+                    ]);
+                }
+            }
+
+            DB::commit();
+            return response()->json(['message' => 'Updated successfully', 'data' => $property->load('seller')]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Error: ' . $e->getMessage()], 500);
+        }
     }
 
-    // DELETE: Soft Delete (Trash)
+    // Soft Delete Property
     public function destroy($id)
     {
-        $property = Property::findOrFail($id);
-        $property->update(['is_deleted' => 1]);
+        DB::beginTransaction();
+        try {
+            $property = Property::findOrFail($id);
+            
+            // Cannot delete if Sold
+            if($property->status === 'SOLD' || $property->status === 'BOOKED') {
+                 return response()->json(['message' => 'Cannot delete sold property'], 400);
+            }
 
-        return response()->json(['message' => 'Moved to trash']);
+            $property->update(['is_deleted' => 1]);
+            
+            // Delete related transactions
+            Transaction::where('property_id', $property->id)->update(['is_deleted' => 1]);
+
+            DB::commit();
+            return response()->json(['message' => 'Moved to trash']);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 
-    // GET: View Trash
+    // View Trash
     public function trash()
     {
         $properties = Property::where('is_deleted', 1)->latest()->paginate(10);
         return response()->json($properties);
     }
 
-    // PATCH: Restore
+    // Restore Property
     public function restore($id)
     {
         $property = Property::findOrFail($id);
         $property->update(['is_deleted' => 0]);
+        
+        Transaction::where('property_id', $property->id)->update(['is_deleted' => 0]);
 
         return response()->json(['message' => 'Restored successfully']);
     }
 
-    // DELETE: Force Delete
+    // Force Delete
     public function forceDelete($id)
     {
         $property = Property::findOrFail($id);
         $property->delete(); 
-
         return response()->json(['message' => 'Permanently deleted']);
+    }
+    // List Fully Paid Inventory (Ready to Sell)
+    public function getReadyToSellProperties(Request $request)
+    {
+        try {
+            // Filter: Only Available & Fully Paid to Vendor
+            $query = Property::where('transaction_type', 'PURCHASE')
+                             ->where('status', 'AVAILABLE')
+                             ->where('due_amount', '<=', 0) // Zero dues
+                             ->where('is_deleted', 0);
+
+            // Optional Search
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where(function($q) use ($search) {
+                    $q->where('title', 'like', "%{$search}%")
+                      ->orWhere('category', 'like', "%{$search}%");
+                });
+            }
+
+            $properties = $query->latest('date')->get(); // No pagination needed for dropdowns usually
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Fetched ready-to-sell inventory',
+                'data' => $properties
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+    // Get 360-Degree Property View
+  // Get 360-Degree Property View (Split Ledger)
+    public function getCompletePropertyDetails($id)
+    {
+        // 1. Fetch Data
+        $property = Property::with([
+            'seller:id,name,phone,email', 
+            'documents',
+            // Fetch ALL transactions linked to this property
+            'transactions' => function($q) { 
+                $q->where('is_deleted', 0)->latest('payment_date');
+            },
+            'sell_deal' => function($q) { 
+                $q->with(['buyer:id,name,phone,email', 'documents'])
+                  ->where('is_deleted', 0);
+            }
+        ])
+        ->where('id', $id)
+        ->where('is_deleted', 0)
+        ->firstOrFail();
+
+        // 2. Separate Transactions
+        // Logic: 
+        // - Purchase Txn: Jisme sell_property_id NULL hai (Vendor ko diya)
+        // - Sale Txn: Jisme sell_property_id Available hai (Customer se aaya)
+        
+        $purchaseTxns = $property->transactions->filter(function($t) {
+            return $t->sell_property_id == null; 
+        })->values();
+
+        $saleTxns = $property->transactions->filter(function($t) {
+            return $t->sell_property_id != null;
+        })->values();
+
+        // 3. Calculations
+        $purchaseCost = $property->total_amount;
+        $saleRevenue  = $property->sell_deal->total_sale_amount ?? 0;
+        $isSold       = ($property->status !== 'AVAILABLE');
+        $profit       = $isSold ? ($saleRevenue - $purchaseCost) : 0;
+
+        // 4. Response Structure
+        $data = [
+            'status' => true,
+            'overview' => [
+                'id'       => $property->id,
+                'title'    => $property->title,
+                'category' => $property->category,
+                'status'   => $property->status,
+                'added_on' => $property->date,
+            ],
+            'financials' => [
+                'purchase_cost' => $purchaseCost,
+                'sale_revenue'  => $isSold ? $saleRevenue : 'Not Sold',
+                'net_profit'    => $isSold ? $profit : 'N/A',
+                'vendor_due'    => $property->due_amount,
+                'customer_due'  => $property->sell_deal->pending_amount ?? 0
+            ],
+            'parties' => [
+                'vendor' => $property->seller ?? null,
+                'buyer'  => $property->sell_deal->buyer ?? null
+            ],
+            'documents' => [
+                'inventory_docs' => $property->documents,
+                'sale_docs'      => $property->sell_deal->documents ?? []
+            ],
+            // SPLIT LEDGER
+            'ledger' => [
+                'purchase_history' => $purchaseTxns, // Paisa Gaya (Out)
+                'sale_history'     => $saleTxns      // Paisa Aaya (In)
+            ]
+        ];
+
+        return response()->json($data);
     }
 }

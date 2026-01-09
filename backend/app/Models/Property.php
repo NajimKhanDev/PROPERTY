@@ -11,12 +11,11 @@ class Property extends Model
 
     // Mass assignable fields
     protected $fillable = [
-        'customer_id',      // NEW: Linked to Customers table
+        'seller_id',       
+        'buyer_id',         
         'date',
-        'transaction_type', // PURCHASE (Seller) or SELL (Buyer)
+        'transaction_type', 
         'invoice_no',
-        // 'party_name',    <-- REMOVED
-        // 'party_phone',   <-- REMOVED
         'title',
         'category',
         'address',
@@ -40,7 +39,6 @@ class Property extends Model
         'is_deleted',
     ];
 
-    // Data types formatting
     protected $casts = [
         'is_deleted' => 'boolean',
         'date' => 'date',
@@ -55,20 +53,36 @@ class Property extends Model
 
     // --- RELATIONSHIPS ---
 
-    // 1. Property belongs to a Customer (Buyer or Seller)
-    public function customer()
+    // 1. Seller Relation
+    public function seller()
     {
-        return $this->belongsTo(Customer::class, 'customer_id');
+        return $this->belongsTo(Customer::class, 'seller_id');
     }
 
-    // 2. Property has many Documents
+    // 2. Buyer Relation 
+    public function buyer()
+    {
+        return $this->belongsTo(Customer::class, 'buyer_id');
+    }
+
+    // 3. Documents 
     public function documents()
     {
-        return $this->hasMany(Document::class, 'property_id');
+        return $this->hasMany(PropertyDocument::class, 'property_id');
+    }
+    
+    // 4. Transactions
+    public function transactions()
+    {
+        return $this->hasMany(Transaction::class, 'property_id');
     }
 
     // --- HELPER SCOPES ---
-
+  
+    public function sell_deal()
+    {
+        return $this->hasOne(SellProperty::class, 'property_id');
+    }
     public function scopePurchases($query)
     {
         return $query->where('transaction_type', 'PURCHASE');
@@ -77,10 +91,5 @@ class Property extends Model
     public function scopeSales($query)
     {
         return $query->where('transaction_type', 'SELL');
-    }
-
-    public function scopeAvailable($query)
-    {
-        return $query->where('status', 'AVAILABLE');
     }
 }

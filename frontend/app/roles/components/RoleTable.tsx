@@ -1,11 +1,9 @@
 import { Edit, Trash } from "lucide-react";
 
-// Format date -> "12 Dec 2025"
+// Format date -> "09 Jan 2026"
 const formatDate = (dateString: string) => {
   if (!dateString) return "—";
-  const date = new Date(dateString);
-
-  return date.toLocaleDateString("en-GB", {
+  return new Date(dateString).toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -21,8 +19,8 @@ export default function RoleTable({ roles, onEdit, onDelete }: any) {
             {[
               "ID",
               "Role Name",
-              "Description",
               "Permissions",
+              "Status",
               "Created",
               "Updated",
               "Actions",
@@ -40,60 +38,63 @@ export default function RoleTable({ roles, onEdit, onDelete }: any) {
         <tbody>
           {roles.map((role: any, idx: number) => (
             <tr
-              key={role.role_id}
-              className={`transition ${
+              key={role.id}
+              className={`${
                 idx % 2 === 0 ? "bg-white" : "bg-gray-50"
-              } hover:bg-blue-50`}
+              } hover:bg-blue-50 transition`}
             >
               {/* ID */}
-              <td className="px-4 py-3 border-b border-gray-100">
-                {role.role_id}
-              </td>
+              <td className="px-4 py-3">{role.id}</td>
 
               {/* Role Name */}
-              <td className="px-4 py-3 border-b border-gray-100 font-medium text-gray-900">
-                {role.name}
+              <td className="px-4 py-3 font-medium">
+                {role.role_name}
               </td>
 
-              {/* Description */}
-              <td className="px-4 py-3 border-b border-gray-100 text-gray-700">
-                {role.desc}
-              </td>
-
-              {/* Permissions (TRUNCATED) */}
+              {/* Permissions */}
               <td
-                className="
-                  px-4 py-3 border-b border-gray-100 text-gray-600
-                  max-w-[260px] truncate whitespace-nowrap overflow-hidden text-ellipsis
-                "
-                title={role.permission?.join(", ")}
+                className="px-4 py-3 max-w-[260px] truncate"
+                title={role.permissions?.join(", ")}
               >
-                {role.permission?.join(", ") || "—"}
+                {role.permissions?.length
+                  ? role.permissions.join(", ")
+                  : "—"}
+              </td>
+
+              {/* Status */}
+              <td className="px-4 py-3">
+                <span
+                  className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                    role.status
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  {role.status ? "Active" : "Inactive"}
+                </span>
               </td>
 
               {/* Created */}
-              <td className="px-4 py-3 border-b border-gray-100 text-gray-500">
+              <td className="px-4 py-3 text-gray-500">
                 {formatDate(role.created_at)}
               </td>
 
               {/* Updated */}
-              <td className="px-4 py-3 border-b border-gray-100 text-gray-500">
+              <td className="px-4 py-3 text-gray-500">
                 {formatDate(role.updated_at)}
               </td>
 
-              {/* Action Buttons */}
-              <td className="px-4 py-3 border-b border-gray-100 flex gap-2">
-                {/* Edit */}
+              {/* Actions */}
+              <td className="px-4 py-3 flex gap-2">
                 <button
-                  className="p-1.5 rounded-md bg-blue-100 hover:bg-blue-200 transition shadow-sm"
+                  className="p-1.5 bg-blue-100 hover:bg-blue-200 rounded-md"
                   onClick={() => onEdit(role)}
                 >
                   <Edit size={14} className="text-blue-600" />
                 </button>
 
-                {/* Delete */}
                 <button
-                  className="p-1.5 rounded-md bg-red-100 hover:bg-red-200 transition shadow-sm"
+                  className="p-1.5 bg-red-100 hover:bg-red-200 rounded-md"
                   onClick={() => onDelete(role)}
                 >
                   <Trash size={14} className="text-red-600" />
@@ -103,6 +104,12 @@ export default function RoleTable({ roles, onEdit, onDelete }: any) {
           ))}
         </tbody>
       </table>
+
+      {!roles.length && (
+        <div className="text-center text-gray-500 py-6">
+          No roles found
+        </div>
+      )}
     </div>
   );
 }
