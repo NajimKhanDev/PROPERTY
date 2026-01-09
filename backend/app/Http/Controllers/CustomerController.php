@@ -101,15 +101,76 @@ class CustomerController extends Controller
         }
     }
 
-    // Show single customer
+  // Show single customer with Full History
     public function show($id)
     {
-        // Find active customer
-        $customer = Customer::where('id', $id)->where('is_deleted', 0)->first();
-        
-        if (!$customer) return response()->json(['status' => false, 'message' => 'Not found'], 404);
+        // 1. Find Customer
+        $customer = Customer::where('id', $id)
+                            ->where('is_deleted', 0)
+                            ->first();
 
-        return response()->json(['status' => true, 'data' => $customer]);
+        if (!$customer) {
+            return response()->json(['status' => false, 'message' => 'Not found'], 404);
+        }
+
+        // 2. Load Relationships (History)
+        // A. Purchases: Jo unhone humse khareeda (via SellProperty table)
+        $purchases = \App\Models\SellProperty::with('property:id,title,category')
+                        ->where('customer_id', $id)
+                        ->where('is_deleted', 0)
+                        ->latest('sale_date')
+                        ->get()
+                        ->map(function($deal) {
+                            return [
+                                'deal_id'     => $deal->id,
+                                'property'    => $deal->property->title ?? 'N/A',
+                                'category'    => $deal->property->category ?? 'N/A',
+                                'invoice_no'  => $deal->invoice_no,
+                                'date'        => $deal->sale_date,
+                                'amount'      => $deal->total_sale_amount,
+                                'paid'        => $deal->received_amount,
+                                'due'         => $deal->pending_amount,
+                                'status'      => ($deal->pending_amount <= 0) ? 'CLEARED' : 'PENDING'
+                            ];
+                        });
+
+        // B. Supplies: Jo unhone humein becha (via Property/Inventory table)
+        $supplies = \App\Models\Property::where('seller_id', $id)
+                        ->where('transaction_type', 'PURCHASE')
+                        ->where('is_deleted', 0)
+                        ->latest('date')
+                        ->get()
+                        ->map(function($prop) {
+                            return [
+                                'property_id' => $prop->id,
+                                'title'       => $prop->title,
+                                'category'    => $prop->category,
+                                'date'        => $prop->date,
+                                'cost'        => $prop->total_amount,
+                                'paid_by_us'  => $prop->paid_amount,
+                                'we_owe'      => $prop->due_amount, // Humare upar udhaari
+                                'status'      => ($prop->due_amount <= 0) ? 'CLEARED' : 'PAYABLE'
+                            ];
+                        });
+
+        // 3. Financial Summary (Optional but helpful)
+        $totalBought = $purchases->sum('amount');
+        $totalSold   = $supplies->sum('cost');
+
+        return response()->json([
+            'status' => true,
+            'data'   => [
+                'profile' => $customer,
+                'summary' => [
+                    'total_purchased_from_us' => $totalBought,
+                    'total_sold_to_us'        => $totalSold,
+                ],
+                'history' => [
+                    'purchases_list' => $purchases, // List of what he bought
+                    'supplies_list'  => $supplies   // List of what he sold to us
+                ]
+            ]
+        ]);
     }
 
     // Update customer details
