@@ -71,13 +71,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('properties/{id}', [PropertyController::class, 'update']);
     Route::delete('properties/{id}', [PropertyController::class, 'destroy']);
 
-   //Transactions
-   Route::get('/transactions/all', [TransactionController::class, 'getAllTransactions']);
-   Route::get('/transactions', [TransactionController::class, 'index']);
-   Route::post('/transactions', [TransactionController::class, 'store']);
-   Route::get('/transactions/{id}', [TransactionController::class, 'show']);
-   Route::put('/transactions/{id}', [TransactionController::class, 'update']);
-   Route::delete('/transactions/{id}', [TransactionController::class, 'destroy']);
+    //Transactions
+    Route::get('/transactions/all', [TransactionController::class, 'getAllTransactions']);
+    Route::get('/transactions', [TransactionController::class, 'index']);
+    Route::post('/transactions', [TransactionController::class, 'store']);
+    Route::get('/transactions/{id}', [TransactionController::class, 'show']);
+    Route::put('/transactions/{id}', [TransactionController::class, 'update']);
+    Route::delete('/transactions/{id}', [TransactionController::class, 'destroy']);
 
 
     //Transactions for sell property
@@ -91,22 +91,22 @@ Route::middleware('auth:sanctum')->group(function () {
 
     //Sell Property
     // Route::apiResource('sell-properties', SellPropertyController::class);
-    Route::get('/sell-properties',[SellPropertyController::class, 'index']);
-    Route::post('/sell-properties',[SellPropertyController::class, 'store']);
-    Route::get('/sell-properties/{id}',[SellPropertyController::class, 'show']);
-    Route::put('/sell-properties/{id}',[SellPropertyController::class, 'update']);
-    Route::delete('/sell-properties/{id}',[SellPropertyController::class, 'destroy']);
+    Route::get('/sell-properties', [SellPropertyController::class, 'index']);
+    Route::post('/sell-properties', [SellPropertyController::class, 'store']);
+    Route::get('/sell-properties/{id}', [SellPropertyController::class, 'show']);
+    Route::put('/sell-properties/{id}', [SellPropertyController::class, 'update']);
+    Route::delete('/sell-properties/{id}', [SellPropertyController::class, 'destroy']);
 
     // 1. List of All Customers with Summary
-Route::get('/reports/customers/all', [App\Http\Controllers\CustomerReportController::class, 'getAllCustomersReport']);
+    Route::get('/reports/customers/all', [App\Http\Controllers\CustomerReportController::class, 'getAllCustomersReport']);
 
-// 2. Detailed Report for One Customer
+    // 2. Detailed Report for One Customer
 
-Route::get('/reports/customers/{id}', [App\Http\Controllers\CustomerReportController::class, 'getSpecificCustomerReport']);
+    Route::get('/reports/customers/{id}', [App\Http\Controllers\CustomerReportController::class, 'getSpecificCustomerReport']);
 
-// 1. Master List of Properties with Profit/Status
-Route::get('/reports/properties/all', [App\Http\Controllers\PropertyReportController::class, 'getAllPropertiesReport']);
+    // 1. Master List of Properties with Profit/Status
+    Route::get('/reports/properties/all', [App\Http\Controllers\PropertyReportController::class, 'getAllPropertiesReport']);
 
-// 2. Specific Property Detailed File
-Route::get('/reports/properties/{id}', [App\Http\Controllers\PropertyReportController::class, 'getSpecificPropertyReport']);
+    // 2. Specific Property Detailed File
+    Route::get('/reports/properties/{id}', [App\Http\Controllers\PropertyReportController::class, 'getSpecificPropertyReport']);
 });
