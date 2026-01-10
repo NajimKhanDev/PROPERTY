@@ -96,7 +96,7 @@ export default function EditRoleModal({ role, onClose, onUpdated }: any) {
             </thead>
             <tbody>
               {permissions.map((perm, i) => (
-                <tr key={perm.module} className="border-b">
+                <tr key={perm.module} className="border-b border-gray-200">
                   <td className="p-2">{perm.module}</td>
                   {["create", "read", "update", "delete"].map((key) => (
                     <td key={key} className="text-center p-2">
