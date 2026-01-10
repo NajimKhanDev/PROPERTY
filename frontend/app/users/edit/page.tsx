@@ -28,7 +28,8 @@ export default function EditUserPage() {
         ProjectApi.userById(Number(id))
       );
 
-      const u = res.data;
+      // console.log(res.data.data[0])
+      const u = res.data.data[0];
 
       setForm({
         name: u.name ?? "",
