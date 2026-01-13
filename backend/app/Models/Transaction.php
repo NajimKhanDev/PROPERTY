@@ -17,6 +17,8 @@ class Transaction extends Model
         'payment_date',
         'payment_mode',
         'reference_no',
+        'transaction_no',
+        'payment_receipt',
         'remarks',
         'is_deleted'
     ];

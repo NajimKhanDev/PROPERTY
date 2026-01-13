@@ -45,12 +45,12 @@ export default function PropertiesPage() {
           Property Management
         </h1>
 
-        <Link
+        {/* <Link
           href="/properties/buy"
           className="px-4 py-2 bg-green-600 text-white rounded-md text-sm"
         >
           Buy Property
-        </Link>
+        </Link> */}
       </div>
 
       {/* TABLE */}

@@ -33,6 +33,9 @@ export default function PropertyViewPage() {
     }
   };
 
+
+
+
   if (loading) {
     return (
       <div className="p-6 text-center text-gray-500">
@@ -163,10 +166,9 @@ export default function PropertyViewPage() {
       </Section>
 
       {/* ================= DOCUMENTS ================= */}
-      <Section title="Property Documents">
+      {/* <Section title="Property Documents">
         <div className="space-y-6">
 
-          {/* Inventory Documents */}
           <div>
             <h3 className="font-semibold mb-2">Inventory Documents</h3>
 
@@ -177,7 +179,6 @@ export default function PropertyViewPage() {
             )}
           </div>
 
-          {/* Sale Documents */}
           <div>
             <h3 className="font-semibold mb-2">Sale Documents</h3>
 
@@ -189,7 +190,7 @@ export default function PropertyViewPage() {
           </div>
 
         </div>
-      </Section>
+      </Section> */}
 
     </div>
   );
@@ -217,6 +218,23 @@ const Info = ({ label, value }: any) => (
   </div>
 );
 
+
+  const isNumeric = (val: any) =>
+    val !== null &&
+    val !== undefined &&
+    val !== "" &&
+    !isNaN(Number(val));
+
+  const formatCurrency = (val: any) => {
+    if (!isNumeric(val)) return "—";
+    return `₹${Number(val).toLocaleString("en-IN")}`;
+  };
+
+  const formatText = (val: any) => {
+    if (val === null || val === undefined || val === "") return "—";
+    return String(val);
+  };
+
 const SummaryCard = ({ label, value, color }: any) => {
   const map: any = {
     green: "bg-green-50 text-green-600",
@@ -228,29 +246,33 @@ const SummaryCard = ({ label, value, color }: any) => {
     <div className={`p-4 rounded-lg ${map[color]}`}>
       <p className="text-sm text-gray-500">{label}</p>
       <p className="text-xl font-bold">
-        ₹{Number(value || 0).toLocaleString("en-IN")}
+        {formatCurrency(value)}
       </p>
     </div>
   );
 };
 
+
 const DueCard = ({ label, value, type }: any) => {
-  const isZero = Number(value) === 0;
+  const numeric = isNumeric(value);
+  const isZero = numeric && Number(value) === 0;
 
   return (
     <div
-      className={`p-4 rounded-lg border ${isZero
+      className={`p-4 rounded-lg border ${
+        !numeric || isZero
           ? "bg-gray-50 text-gray-600"
           : type === "customer"
-            ? "bg-yellow-50 text-yellow-700 border-yellow-200"
-            : "bg-purple-50 text-purple-700 border-purple-200"
-        }`}
+          ? "bg-yellow-50 text-yellow-700 border-yellow-200"
+          : "bg-purple-50 text-purple-700 border-purple-200"
+      }`}
     >
       <p className="text-sm">{label}</p>
       <p className="text-xl font-bold">
-        ₹{Number(value || 0).toLocaleString("en-IN")}
+        {formatCurrency(value)}
       </p>
-      {!isZero && (
+
+      {numeric && !isZero && (
         <p className="text-xs mt-1">
           {type === "customer"
             ? "Amount to receive from customer"
@@ -260,6 +282,7 @@ const DueCard = ({ label, value, type }: any) => {
     </div>
   );
 };
+
 
 const LedgerTable = ({
   data,
@@ -278,9 +301,9 @@ const LedgerTable = ({
         <th className="text-right p-3">Amount</th>
       </tr>
     </thead>
-    <tbody className="divide-y">
+    <tbody className="divide-y ">
       {data.map((tx) => (
-        <tr key={tx.id}>
+        <tr key={tx.id} className="border-b border-gray-200">
           <td className="p-3">
             {new Date(tx.payment_date).toLocaleDateString("en-IN")}
           </td>
@@ -289,8 +312,8 @@ const LedgerTable = ({
           <td className="p-3">{tx.remarks || "—"}</td>
           <td
             className={`p-3 text-right font-semibold ${type === "CREDIT"
-                ? "text-green-600"
-                : "text-red-600"
+              ? "text-green-600"
+              : "text-red-600"
               }`}
           >
             ₹{Number(tx.amount).toLocaleString("en-IN")}

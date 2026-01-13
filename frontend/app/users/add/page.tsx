@@ -1,14 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import axiosInstance from "@/app/api/axiosInstance";
 import ProjectApi from "@/app/api/ProjectApis";
 import toast from "react-hot-toast";
+import { CloudCog } from "lucide-react";
 
 export default function AddUserPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [roles, setRoles] = useState<any[]>([]);
+
 
   const [form, setForm] = useState({
     name: "",
@@ -16,6 +19,22 @@ export default function AddUserPage() {
     role_id: "",
     password: "",
   });
+
+  useEffect(() => {
+    fetchRoles();
+  }, []);
+
+  const fetchRoles = async () => {
+    try {
+      const res = await axiosInstance.get("/roles");
+      setRoles(res.data?.data || []);
+    } catch (err) {
+      toast.error("Failed to load roles");
+    }
+  };
+
+
+  // console.log(roles)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,10 +118,12 @@ export default function AddUserPage() {
             </div>
 
             {/* ROLE */}
+            {/* ROLE */}
             <div>
               <label className="block text-sm font-medium mb-1">
                 Role
               </label>
+
               <select
                 className={inputClass}
                 value={form.role_id}
@@ -112,10 +133,15 @@ export default function AddUserPage() {
                 required
               >
                 <option value="">Select role</option>
-                <option value="1">Super Admin</option>
-                <option value="2">User</option>
+
+                {roles.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.role_name}
+                  </option>
+                ))}
               </select>
             </div>
+
 
             {/* PASSWORD */}
             <div>

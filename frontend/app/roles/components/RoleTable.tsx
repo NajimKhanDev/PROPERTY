@@ -38,13 +38,13 @@ export default function RoleTable({ roles, onEdit, onDelete }: any) {
         <tbody>
           {roles.map((role: any, idx: number) => (
             <tr
-              key={role.id}
+              key={idx}
               className={`${
                 idx % 2 === 0 ? "bg-white" : "bg-gray-50"
               } hover:bg-blue-50 transition`}
             >
               {/* ID */}
-              <td className="px-4 py-3">{role.id}</td>
+              <td className="px-4 py-3">{idx+1}</td>
 
               {/* Role Name */}
               <td className="px-4 py-3 font-medium">

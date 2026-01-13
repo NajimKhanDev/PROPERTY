@@ -12,6 +12,8 @@ export default function EditUserPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [roles, setRoles] = useState<any[]>([]);
+
 
   const [form, setForm] = useState({
     name: "",
@@ -19,32 +21,47 @@ export default function EditUserPage() {
     role_id: "",
   });
 
+
   useEffect(() => {
-  if (!id) return;
+    fetchRoles();
+  }, []);
 
-  const fetchUser = async () => {
+  const fetchRoles = async () => {
     try {
-      const res = await axiosInstance.get(
-        ProjectApi.userById(Number(id))
-      );
-
-      // console.log(res.data.data[0])
-      const u = res.data.data[0];
-
-      setForm({
-        name: u.name ?? "",
-        email: u.email ?? "",
-        role_id: String(u.role_id ?? u.role?.id ?? ""),
-      });
-    } catch (err) {
-      toast.error("Failed to load user");
-    } finally {
-      setLoading(false);
+      const res = await axiosInstance.get("/roles");
+      setRoles(res.data?.data || []);
+    } catch {
+      toast.error("Failed to load roles");
     }
   };
 
-  fetchUser();
-}, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+
+    const fetchUser = async () => {
+      try {
+        const res = await axiosInstance.get(
+          ProjectApi.userById(Number(id))
+        );
+
+        // console.log(res.data.data[0])
+        const u = res.data.data[0];
+
+        setForm({
+          name: u.name ?? "",
+          email: u.email ?? "",
+          role_id: String(u.role_id ?? u.role?.id ?? ""),
+        });
+      } catch (err) {
+        toast.error("Failed to load user");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+  }, [id]);
 
 
   const submit = async (e: React.FormEvent) => {
@@ -107,7 +124,10 @@ export default function EditUserPage() {
           </div>
 
           <div>
-            <label className="text-sm font-medium text-black">Role</label>
+            <label className="text-sm font-medium text-black">
+              Role
+            </label>
+
             <select
               className={inputClass}
               value={form.role_id}
@@ -117,10 +137,21 @@ export default function EditUserPage() {
               required
             >
               <option value="">Select role</option>
-              <option value="1">Super Admin</option>
-              <option value="2">User</option>
+
+              {roles.map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.role_name}
+                </option>
+              ))}
             </select>
+
+            {roles.length === 0 && (
+              <p className="text-xs text-gray-400 mt-1">
+                Loading roles…
+              </p>
+            )}
           </div>
+
 
           <div className="flex justify-end gap-3 pt-4">
             <button

@@ -24,11 +24,16 @@ class TransactionController extends Controller
         }
 
         // Fetch data
-        $transactions = Transaction::with('sale_deal:id,invoice_no,customer_id')
+        $query = Transaction::with('sale_deal:id,invoice_no,customer_id')
             ->where('property_id', $request->property_id)
-            ->where('is_deleted', 0)
-            ->latest('payment_date')
-            ->get();
+            ->where('is_deleted', 0);
+
+        // Filter by type if provided
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+
+        $transactions = $query->latest('payment_date')->get();
 
         // Calculate summary
         $totalCredit = $transactions->where('type', 'CREDIT')->sum('amount');
@@ -144,23 +149,36 @@ class TransactionController extends Controller
     // Input $id yahan 'property_id' hai
     public function getTransactionsByPropertyId($id)
     {
+        // Check if property exists
+        $property = Property::where('id', $id)->where('is_deleted', 0)->first();
+        if (!$property) {
+            return response()->json([
+                'status' => false, 
+                'message' => 'Property not found'
+            ], 404);
+        }
         
         $saleDeal = SellProperty::with(['buyer:id,name,phone', 'property:id,title'])
-                                ->where('property_id', $id) // FIX: Changed 'id' to 'property_id'
+                                ->where('property_id', $id)
                                 ->where('is_deleted', 0)
                                 ->first();
 
         if (!$saleDeal) {
             return response()->json([
-                'status' => false, 
-                'message' => 'No active sale found for this Property ID'
-            ], 404);
+                'status' => true,
+                'message' => 'No sale transactions found for this property',
+                'deal_summary' => [
+                    'property_id' => $id,
+                    'property_title' => $property->title,
+                    'status' => 'NOT_SOLD'
+                ],
+                'transactions' => []
+            ]);
         }
 
         // 2. Fetch Transactions linked to the FOUND SALE DEAL
-        // Ab hum $saleDeal->id use karenge (jo ki asli Sale ID hai) na ki input wala $id
-        $transactions = Transaction::where('sell_property_id', $saleDeal->id) // FIX: Use deal ID, not property ID
-                                   ->where('type', 'CREDIT') // Only Income
+        $transactions = Transaction::where('sell_property_id', $saleDeal->id)
+                                   ->where('type', 'CREDIT')
                                    ->where('is_deleted', 0)
                                    ->latest('payment_date')
                                    ->get();
@@ -169,8 +187,8 @@ class TransactionController extends Controller
         return response()->json([
             'status' => true,
             'deal_summary' => [
-                'sale_id'        => $saleDeal->id,        // Asli Sale ID
-                'property_id'    => $saleDeal->property_id, // Jo tumne bheja tha
+                'sale_id'        => $saleDeal->id,
+                'property_id'    => $saleDeal->property_id,
                 'invoice_no'     => $saleDeal->invoice_no,
                 'property_title' => $saleDeal->property->title ?? 'N/A',
                 'buyer_name'     => $saleDeal->buyer->name ?? 'N/A',
@@ -358,6 +376,56 @@ class TransactionController extends Controller
             'status' => true,
             'message' => 'Transactions fetched successfully',
             'data' => $query->paginate($perPage)
+        ]);
+    }
+
+    public function getBuyTransactions(Request $request)
+    {
+        $query = Transaction::with([
+            'property:id,title,seller_id',
+            'property.seller:id,name,phone'
+        ])
+        ->where('type', 'DEBIT')
+        ->where('is_deleted', 0);
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('reference_no', 'like', "%{$search}%")
+                  ->orWhere('remarks', 'like', "%{$search}%")
+                  ->orWhereHas('property', fn($subQ) => $subQ->where('title', 'like', "%{$search}%"))
+                  ->orWhereHas('property.seller', fn($subQ) => $subQ->where('name', 'like', "%{$search}%"));
+            });
+        }
+
+        return response()->json([
+            'status' => true,
+            'data' => $query->latest('payment_date')->paginate(20)
+        ]);
+    }
+
+    public function getSellTransactions(Request $request)
+    {
+        $query = Transaction::with([
+            'property:id,title',
+            'sale_deal.buyer:id,name,phone'
+        ])
+        ->where('type', 'CREDIT')
+        ->where('is_deleted', 0);
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('reference_no', 'like', "%{$search}%")
+                  ->orWhere('remarks', 'like', "%{$search}%")
+                  ->orWhereHas('property', fn($subQ) => $subQ->where('title', 'like', "%{$search}%"))
+                  ->orWhereHas('sale_deal.buyer', fn($subQ) => $subQ->where('name', 'like', "%{$search}%"));
+            });
+        }
+
+        return response()->json([
+            'status' => true,
+            'data' => $query->latest('payment_date')->paginate(20)
         ]);
     }
 }

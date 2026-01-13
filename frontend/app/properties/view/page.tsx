@@ -15,6 +15,21 @@ export default function PropertyViewPage() {
   const [property, setProperty] = useState<any>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [emiOpen, setEmiOpen] = useState(true); // default expanded
+
+  const [emis, setEmis] = useState<any[]>([]);
+  const [openEmiPay, setOpenEmiPay] = useState(false);
+  const [selectedEmi, setSelectedEmi] = useState<any>(null);
+  const [emiLoading, setEmiLoading] = useState(false);
+
+  const [emiPayment, setEmiPayment] = useState({
+    paid_amount: "",
+    payment_mode: "BANK",
+    transaction_no: "", // ✅ NEW
+    payment_receipt: null as File | null,
+  });
+
+
 
   // payment modal
   const [openPayment, setOpenPayment] = useState(false);
@@ -33,8 +48,23 @@ export default function PropertyViewPage() {
     if (!propertyId) return;
     fetchProperty();
     fetchTransactions();
+    fetchEmis();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
+
+  const fetchEmis = async () => {
+    try {
+      const res = await axiosInstance.get(
+        `/emis?property_id=${propertyId}`
+      );
+
+      // pagination response
+      setEmis(res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to load EMIs", err);
+    }
+  };
+
 
   const fetchProperty = async () => {
     try {
@@ -53,7 +83,7 @@ export default function PropertyViewPage() {
   const fetchTransactions = async () => {
     try {
       const res = await axiosInstance.get(
-        `/transactions?property_id=${propertyId}`
+        `/transactions?property_id=${propertyId}&type=DEBIT`
       );
       setTransactions(res.data?.data || []);
     } catch (err) {
@@ -102,6 +132,76 @@ export default function PropertyViewPage() {
 
   };
 
+  const submitEmiPayment = async () => {
+    if (!selectedEmi) return;
+
+    if (!emiPayment.payment_receipt) {
+      toast.error("Payment receipt is required");
+      return;
+    }
+
+    if (
+      (emiPayment.payment_mode === "BANK" ||
+        emiPayment.payment_mode === "ONLINE") &&
+      !emiPayment.transaction_no
+    ) {
+      toast.error("Transaction number is required");
+      return;
+    }
+
+
+
+    try {
+      setEmiLoading(true);
+
+      const formData = new FormData();
+      formData.append("paid_amount", emiPayment.paid_amount);
+      formData.append("payment_mode", emiPayment.payment_mode);
+      formData.append("transaction_no", emiPayment.transaction_no);
+
+      if (emiPayment.payment_receipt) {
+        formData.append("payment_receipt", emiPayment.payment_receipt);
+      }
+
+      await axiosInstance.post(
+        `/emis/${selectedEmi.id}/pay`,
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+
+      toast.success("EMI paid successfully");
+
+
+      setOpenEmiPay(false);
+      setEmiPayment({
+        paid_amount: "",
+        payment_mode: "BANK",
+        transaction_no: "",
+        payment_receipt: null,
+      });
+
+
+      fetchEmis();
+      fetchTransactions();
+      fetchProperty();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Payment failed");
+    } finally {
+      setEmiLoading(false);
+    }
+  };
+
+
+  const formatAmount = (val: any) =>
+    val !== null && val !== undefined
+      ? `₹${Number(val).toLocaleString("en-IN")}`
+      : "—";
+
+  const formatText = (val: any) => val ?? "—";
+
+  const allEmisPaid =
+    emis.length > 0 && emis.every((emi) => emi.status === "PAID");
+
 
   if (loading) {
     return (
@@ -135,18 +235,156 @@ export default function PropertyViewPage() {
       </div>
 
       {/* ================= PROPERTY INFO ================= */}
-      <div className="bg-white rounded-xl shadow-sm p-6 space-y-4 text-sm">
+      <div className="bg-white rounded-xl shadow-sm p-6 space-y-6 text-sm">
         <h2 className="text-lg font-semibold">Property Information</h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Info label="Title" value={property.title} />
-          <Info label="Transaction Type" value={property.transaction_type} />
-          <Info label="Category" value={property.category} />
-          <Info label="Status" value={property.status} />
-          <Info label="Address" value={property.address} />
-          <Info label="Invoice No" value={property.invoice_no} />
+        {/* BASIC DETAILS */}
+        <div>
+          <h4 className="font-bold text-gray-700 mb-3">Basic Details</h4>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Info label="Transaction Type" value={property.transaction_type} />
+            <Info label="Title" value={property.title} />
+            <Info label="Category" value={property.category} />
+            <Info label="Status" value={property.status} />
+            {/* <Info label="Invoice No" value={property.invoice_no} /> */}
+            {/* <Info label="Payment Mode" value={property.payment_mode} /> */}
+          </div>
         </div>
+
+        {/* LOCATION & PROPERTY */}
+        <div>
+          <h4 className="font-bold text-gray-700 mb-3">Property Details</h4>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Info label="Address" value={property.address} />
+            <Info label="Plot Number" value={property.plot_number} />
+            <Info label="Khata Number" value={property.khata_number} />
+            {/* <Info label="House Number" value={property.house_number} />
+            <Info label="Floor Number" value={property.floor_number} />
+            <Info label="BHK" value={property.bhk} /> */}
+          </div>
+        </div>
+
+        {/* AREA DETAILS */}
+        <div>
+          <h4 className="font-bold text-gray-700 mb-3">Area Details</h4>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Info label="Area (Dismil)" value={property.area_dismil} />
+            <Info
+              label="Per Dismil Amount"
+              value={formatAmount(property.per_dismil_amount)}
+            />
+            {/* <Info
+              label="Super Built-up Area"
+              value={property.super_built_up_area}
+            /> */}
+          </div>
+        </div>
+
+
+
+        {/* FINANCIAL DETAILS */}
+        {/* <div>
+          <h4 className="font-bold text-gray-700 mb-3">Financial Details</h4>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Info label="Quantity" value={property.quantity} />
+            <Info label="Rate" value={formatAmount(property.rate)} />
+            <Info label="Base Amount" value={formatAmount(property.base_amount)} />
+            <Info
+              label="GST (%)"
+              value={property.gst_percentage}
+            />
+            <Info label="GST Amount" value={formatAmount(property.gst_amount)} />
+            <Info
+              label="Other Expenses"
+              value={formatAmount(property.other_expenses)}
+            />
+            <Info
+              label="Total Amount"
+              value={formatAmount(property.total_amount)}
+            />
+            <Info
+              label="Paid Amount"
+              value={formatAmount(property.paid_amount)}
+            />
+            <Info
+              label="Due Amount"
+              value={formatAmount(property.due_amount)}
+            />
+          </div>
+        </div> */}
+
+        {/* EMI DETAILS */}
+        {/* <div>
+          <h4 className="font-bold text-gray-700 mb-3">EMI Details</h4>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Info label="Period (Years)" value={property.period_years} />
+            <Info
+              label="Amount / Month"
+              value={formatAmount(property.amount_per_month)}
+            />
+          </div>
+        </div> */}
+
+        {/* RECEIPT */}
+        {/* {property.payment_receipt && (
+          <div>
+            <h4 className="font-medium text-gray-700 mb-2">Payment Receipt</h4>
+            <a
+              href={`${process.env.NEXT_PUBLIC_IMAGE_BASE_URL}/${property.payment_receipt}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 text-sm font-medium hover:underline"
+            >
+              View Receipt
+            </a>
+          </div>
+        )} */}
       </div>
+
+      {/* ================= VENDOR DETAILS ================= */}
+      {property?.seller && (
+        <div className="bg-white rounded-xl shadow-sm p-6 space-y-4 mt-5">
+          <h3 className="text-lg font-semibold text-gray-800">
+            Vendor (Seller) Details
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <Info label="Name" value={property.seller.name} />
+            <Info label="Phone" value={property.seller.phone} />
+            <Info label="Email" value={property.seller.email} />
+            <Info label="Address" value={property.seller.address} />
+            <Info label="PAN Number" value={property.seller.pan_number} />
+            <Info label="Aadhaar Number" value={property.seller.aadhar_number} />
+          </div>
+
+          {/* DOCUMENT LINKS */}
+          <div className="flex flex-wrap gap-6 pt-2">
+            {property.seller.pan_file_path && (
+              <a
+                href={`${process.env.NEXT_PUBLIC_IMAGE_BASE_URL}/${property.seller.pan_file_path}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 text-sm hover:underline"
+              >
+                View PAN Document
+              </a>
+            )}
+
+            {property.seller.aadhar_file_path && (
+              <a
+                href={`${process.env.NEXT_PUBLIC_IMAGE_BASE_URL}/${property.seller.aadhar_file_path}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 text-sm hover:underline"
+              >
+                View Aadhaar Document
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
+
 
       {/* ================= PAYMENTS ================= */}
       <div className="mt-6 bg-white rounded-xl shadow-sm p-6">
@@ -159,7 +397,7 @@ export default function PropertyViewPage() {
           <SummaryCard label="Total Amount" value={property.total_amount} color="blue" />
         </div>
 
-        {property.due_amount > 0 && (
+        {property.due_amount > 0 && allEmisPaid && (
           <button
             onClick={() => {
               setPayment({
@@ -177,6 +415,7 @@ export default function PropertyViewPage() {
           </button>
         )}
 
+
         {/* TRANSACTIONS */}
         <h4 className="font-semibold mt-6 mb-3">Transaction History</h4>
 
@@ -185,27 +424,58 @@ export default function PropertyViewPage() {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b text-gray-500">
+              <tr className="border-b border-gray-200 text-gray-500">
                 <th className="text-left py-2">Date</th>
                 <th className="text-left py-2">Mode</th>
+                <th className="text-left py-2">Transaction No</th>
                 <th className="text-left py-2">Reference</th>
+                <th className="text-left py-2">Receipt</th>
                 <th className="text-left py-2">Remarks</th>
                 <th className="text-right py-2">Amount</th>
               </tr>
+
             </thead>
             <tbody>
               {transactions.map((tx) => (
-                <tr key={tx.id} className="border-b last:border-0">
+                <tr key={tx.id} className="border-b border-gray-200 last:border-0">
                   <td className="py-2">
                     {new Date(tx.payment_date).toLocaleDateString("en-IN")}
                   </td>
+
                   <td className="py-2">{tx.payment_mode}</td>
-                  <td className="py-2">{tx.reference_no || "—"}</td>
-                  <td className="py-2">{tx.remarks || "—"}</td>
+
+                  <td className="py-2">
+                    {tx.transaction_no || "—"}
+                  </td>
+
+                  <td className="py-2">
+                    {tx.reference_no || "—"}
+                  </td>
+
+                  <td className="py-2">
+                    {tx.payment_receipt ? (
+                      <a
+                        href={`${process.env.NEXT_PUBLIC_IMAGE_BASE_URL}/${tx.payment_receipt}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 text-xs font-medium hover:underline"
+                      >
+                        View
+                      </a>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
+
+                  <td className="py-2">
+                    {tx.remarks || "—"}
+                  </td>
+
                   <td className="py-2 text-right font-medium text-red-600">
                     ₹{Number(tx.amount).toLocaleString("en-IN")}
                   </td>
                 </tr>
+
               ))}
             </tbody>
           </table>
@@ -213,8 +483,138 @@ export default function PropertyViewPage() {
       </div>
 
 
-      {/* ================= DOCUMENTS ================= */}
+      {/* ================= EMI ================= */}
       <div className="mt-6 bg-white rounded-xl shadow-sm p-6">
+        <div
+          className="flex items-center justify-between mb-4 cursor-pointer select-none"
+          onClick={() => setEmiOpen(!emiOpen)}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-lg">
+              {emiOpen ? "▾" : "▸"}
+            </span>
+            <h3 className="text-lg font-semibold text-gray-800">
+              EMI Schedule
+            </h3>
+          </div>
+
+          <span className="text-xs text-gray-500">
+            Total EMIs: {emis.length}
+          </span>
+        </div>
+
+
+        {emiOpen && (
+          emis.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              No EMI schedule available
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                <thead className="bg-gray-50">
+                  <tr className="text-gray-600">
+                    <th className="px-4 py-3 text-left">EMI No</th>
+                    <th className="px-4 py-3 text-left">Due Date</th>
+                    <th className="px-4 py-3 text-right">EMI Amount</th>
+                    <th className="px-4 py-3 text-right">Paid</th>
+                    <th className="px-4 py-3 text-right">Transaction No</th>
+                    <th className="px-4 py-3 text-center">Status</th>
+                    <th className="px-4 py-3 text-center">Receipt</th>
+                    <th className="px-4 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {emis.map((emi) => {
+                    const isPaid = emi.status === "PAID";
+
+                    return (
+                      <tr
+                        key={emi.id}
+                        className="border-t border-gray-200 hover:bg-gray-50 transition"
+                      >
+                        <td className="px-4 py-3 font-medium">
+                          EMI {emi.emi_number}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {new Date(emi.due_date).toLocaleDateString("en-IN")}
+                        </td>
+
+                        <td className="px-4 py-3 text-right font-medium">
+                          ₹{Number(emi.emi_amount).toLocaleString("en-IN")}
+                        </td>
+
+                        <td className="px-4 py-3 text-right text-gray-700">
+                          ₹{Number(emi.paid_amount).toLocaleString("en-IN")}
+                        </td>
+                        <td className="px-4 py-3 font-medium">
+                          {emi.transaction_no}
+                        </td>
+
+                        <td className="px-4 py-3 text-center">
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-medium ${isPaid
+                              ? "bg-green-100 text-green-700"
+                              : "bg-yellow-100 text-yellow-700"
+                              }`}
+                          >
+                            {emi.status}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-3 text-center">
+                          {emi.payment_receipt ? (
+                            <a
+                              href={`${process.env.NEXT_PUBLIC_IMAGE_BASE_URL}/${emi.payment_receipt}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 text-xs font-medium hover:underline"
+                            >
+                              View
+                            </a>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+
+
+                        <td className="px-4 py-3 text-right">
+                          {!isPaid ? (
+                            <button
+                              onClick={() => {
+                                setSelectedEmi(emi);
+                                setEmiPayment({
+                                  paid_amount: emi.emi_amount,
+                                  payment_mode: "BANK",
+                                  transaction_no: "",
+                                  payment_receipt: null,
+                                });
+                                setOpenEmiPay(true);
+                              }}
+                              className="px-3 py-1.5 text-xs font-medium bg-[#0070BB] text-white rounded-md hover:bg-[#005A99]"
+                            >
+                              Pay EMI
+                            </button>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
+        )}
+      </div>
+
+
+
+      {/* ================= DOCUMENTS ================= */}
+      {/* <div className="mt-6 bg-white rounded-xl shadow-sm p-6">
         <h3 className="text-lg font-semibold mb-4">Documents</h3>
 
         {property.documents?.length === 0 ? (
@@ -222,7 +622,6 @@ export default function PropertyViewPage() {
         ) : (
           <div className="space-y-6">
 
-            {/* Purchase / Inventory Docs */}
             <div>
               <h4 className="font-medium mb-2">Purchase / Inventory Documents</h4>
 
@@ -237,7 +636,6 @@ export default function PropertyViewPage() {
               )}
             </div>
 
-            {/* Sale Docs */}
             <div>
               <h4 className="font-medium mb-2">Sale Documents</h4>
 
@@ -254,7 +652,7 @@ export default function PropertyViewPage() {
 
           </div>
         )}
-      </div>
+      </div> */}
 
       {/* ================= MODAL ================= */}
       {openPayment && (
@@ -334,6 +732,140 @@ export default function PropertyViewPage() {
           </div>
         </div>
       )}
+
+
+      {openEmiPay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">
+              Pay EMI
+            </h3>
+            <p className="text-xs text-gray-500 mb-4">
+              EMI #{selectedEmi?.emi_number} · Due on{" "}
+              {selectedEmi &&
+                new Date(selectedEmi.due_date).toLocaleDateString("en-IN")}
+            </p>
+
+            {/* EMI Amount */}
+            <div className="mb-4">
+              <label className="text-xs text-gray-500">EMI Amount</label>
+              <input
+                type="number"
+                value={emiPayment.paid_amount}
+                onChange={(e) =>
+                  setEmiPayment({
+                    ...emiPayment,
+                    paid_amount: e.target.value,
+                  })
+                }
+                disabled
+                className="w-full mt-1 border rounded-md px-3 py-2 focus:ring-2 focus:ring-[#0070BB]"
+              />
+            </div>
+
+            {/* Payment Mode */}
+            <div className="mb-4">
+              <label className="text-xs text-gray-500">Payment Mode</label>
+              <select
+                value={emiPayment.payment_mode}
+                onChange={(e) =>
+                  setEmiPayment({
+                    ...emiPayment,
+                    payment_mode: e.target.value,
+                  })
+                }
+                className="w-full mt-1 border rounded-md px-3 py-2"
+              >
+                <option value="BANK">Bank</option>
+                <option value="ONLINE">Online</option>
+                <option value="CASH">Cash</option>
+              </select>
+            </div>
+
+            {/* Transaction No (BANK / ONLINE only) */}
+            {(emiPayment.payment_mode === "BANK" ||
+              emiPayment.payment_mode === "ONLINE") && (
+                <div className="mb-4">
+                  <label className="text-xs text-gray-500">
+                    Transaction No <span className="text-red-500">*</span>
+                  </label>
+
+                  <input
+                    type="text"
+                    placeholder="Enter transaction number"
+                    value={emiPayment.transaction_no}
+                    required
+                    onChange={(e) =>
+                      setEmiPayment({
+                        ...emiPayment,
+                        transaction_no: e.target.value,
+                      })
+                    }
+                    className="w-full mt-1 border rounded-md px-3 py-2 focus:ring-2 focus:ring-[#0070BB]"
+                  />
+                </div>
+              )}
+
+
+            {/* Receipt */}
+            <div className="mb-6">
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Payment Receipt <span className="text-red-500">*</span>
+              </label>
+
+              <input
+                type="file"
+                accept=".jpg,.jpeg,.png,.pdf"
+                required
+                onChange={(e) =>
+                  setEmiPayment({
+                    ...emiPayment,
+                    payment_receipt: e.target.files?.[0] || null,
+                  })
+                }
+                className="
+      w-full rounded-lg border border-gray-300 bg-white
+      px-3 py-2 text-sm text-gray-700
+      file:mr-4 file:rounded-md file:border-0
+      file:bg-blue-600 file:px-4 file:py-2
+      file:text-xs file:font-medium file:text-white
+      hover:file:bg-blue-700
+      focus:outline-none focus:ring-2 focus:ring-blue-500
+    "
+              />
+
+              <p className="mt-1 text-xs text-gray-500">
+                Accepted formats: JPG, PNG, PDF · Max size 5MB
+              </p>
+            </div>
+
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setOpenEmiPay(false)}
+                className="px-4 py-2 rounded-md bg-gray-100 hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitEmiPayment}
+                disabled={emiLoading || !emiPayment.payment_receipt || !emiPayment.transaction_no}
+                className={`px-4 py-2 rounded-md text-white ${emiLoading || !emiPayment.payment_receipt || !emiPayment.transaction_no
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-[#0070BB] hover:bg-[#005A99]"
+                  }`}
+              >
+
+                {emiLoading ? "Processing..." : "Confirm Payment"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
     </div>
   );
