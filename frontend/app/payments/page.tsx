@@ -36,7 +36,7 @@ export default function PaymentsPage() {
 
       const params: any = {
         page,
-        per_page: 20,
+        per_page: 10,
         sort_by: sortBy,
         sort_order: sortOrder,
       };
@@ -218,7 +218,7 @@ export default function PaymentsPage() {
 
 
       {/* STATS */}
-      <div className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-6">
+      {/* <div className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-6">
         {[
           { label: "Total Payments", value: payments.length },
           // { label: "Total Amount", value: `₹${totalAmount.toLocaleString("en-IN")}`, color: "text-green-600" },
@@ -231,14 +231,14 @@ export default function PaymentsPage() {
             </p>
           </div>
         ))}
-      </div>
+      </div> */}
 
       {/* TABLE */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {["Date", "Property", "Buyer", "Seller", "Amount", "Type"].map(
+              {["S no","Date", "Property", "Buyer", "Seller", "Amount", "Type"].map(
                 (h) => (
                   <th
                     key={h}
@@ -261,8 +261,11 @@ export default function PaymentsPage() {
             )}
 
             {!loading &&
-              payments.map((p) => (
+              payments.map((p,i) => (
                 <tr key={p.id} className="hover:bg-gray-50 transition">
+                  <td className="px-5 py-3">
+                    {i + 1}
+                  </td>
                   <td className="px-5 py-3">
                     {new Date(p.payment_date).toLocaleDateString("en-GB")}
                   </td>

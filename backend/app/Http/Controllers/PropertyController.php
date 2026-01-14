@@ -5,9 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\Property;
 use App\Models\Transaction;
 use App\Models\PropertyDocument;
+use App\Models\Emi;
+use App\Models\SellProperty;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon;
 
 class PropertyController extends Controller
 {
@@ -50,7 +53,7 @@ class PropertyController extends Controller
         }
 
         // 7. Sort and Paginate
-        $query->orderBy($request->input('sort_by', 'date'), $request->input('sort_order', 'desc'));
+        $query->orderBy($request->input('sort_by', 'created_at'), $request->input('sort_order', 'desc'));
         
         return response()->json($query->paginate($request->input('per_page', 10)));
     }
@@ -58,111 +61,145 @@ class PropertyController extends Controller
     // Create Inventory (PURCHASE ONLY)
     public function store(Request $request)
     {
-        // Validate Purchase Input
         $request->validate([
-            'transaction_type' => 'required|in:PURCHASE', // Strict: Purchase only
-            'seller_id'        => 'required|exists:customers,id', // Vendor required
+            'transaction_type' => 'required|in:PURCHASE',
+            'seller_id'        => 'required|exists:customers,id',
             'title'            => 'required|string|max:255',
             'category'         => 'required|in:LAND,FLAT,HOUSE,COMMERCIAL,AGRICULTURE',
-            'quantity'         => 'required|integer|min:1',
-            'rate'             => 'required|numeric|min:0',
-            'invoice_no'       => 'nullable|string|max:50',
+            'address'          => 'nullable|string',
+            'plot_number'      => 'nullable|string',
+            'khata_number'     => 'nullable|string',
+            'area_dismil'      => 'nullable|numeric|min:0',
+            'per_dismil_amount' => 'nullable|numeric|min:0',
+            'total_amount'     => 'required|numeric|min:0',
             'paid_amount'      => 'nullable|numeric|min:0',
-            'documents'        => 'nullable|array',
-            'documents.*'      => 'file|mimes:jpg,jpeg,png,pdf|max:10240'
+            'due_amount'       => 'nullable|numeric|min:0',
+            'period_years'     => 'nullable|integer|min:1',
+            'amount_per_month' => 'nullable|numeric|min:0',
+            'payment_mode'     => 'nullable|string',
+            'payment_receipt'  => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
+            'transaction_no'   => 'nullable|string'
         ]);
 
         DB::beginTransaction();
 
         try {
-            // Calculate Financials
-            $quantity   = $request->input('quantity', 1);
-            $rate       = $request->input('rate', 0);
-            $baseAmount = $quantity * $rate;
+            $data = $request->except(['payment_receipt']);
+            $data['date'] = $request->filled('date') ? $request->date : now();
+            $data['is_deleted'] = 0;
+            $data['status'] = 'AVAILABLE';
             
-            $gstPercent = $request->input('gst_percentage', 0);
-            $gstAmount  = ($gstPercent > 0) ? ($baseAmount * ($gstPercent / 100)) : 0;
-            
-            $other      = $request->input('other_expenses', 0);
-            $total      = $baseAmount + $gstAmount + $other;
-            
-            $paid       = $request->input('paid_amount', 0);
-            $due        = $total - $paid;
-            $date       = $request->filled('date') ? $request->date : now();
+            // Set default values for required fields
+            $data['rate'] = $request->per_dismil_amount ?? 0;
+            $data['quantity'] = 1;
+            $data['base_amount'] = ($data['area_dismil'] ?? 0) * ($data['per_dismil_amount'] ?? 0);
+            $data['gst_percentage'] = 0;
+            $data['gst_amount'] = 0;
+            $data['other_expenses'] = 0;
 
-            // 1. Create Property (Inventory)
-            $property = Property::create([
-                'seller_id'        => $request->seller_id, 
-                'buyer_id'         => null, // No buyer yet
-                'transaction_type' => 'PURCHASE', // Always Purchase
-                'title'            => $request->title,
-                'category'         => $request->category,
-                'date'             => $date,
-                'invoice_no'       => $request->invoice_no,
-                'quantity'         => $quantity,
-                'rate'             => $rate,
-                'base_amount'      => $baseAmount,
-                'gst_percentage'   => $gstPercent,
-                'gst_amount'       => $gstAmount,
-                'other_expenses'   => $other,
-                'total_amount'     => $total,
-                'paid_amount'      => $paid,
-                'due_amount'       => $due,
-                'status'           => 'AVAILABLE', // Always Available initially
-                'is_deleted'       => 0
-            ]);
-
-            // 2. Create Debit Transaction (Expense)
-            if ($paid > 0) {
-                Transaction::create([
-                    'property_id'      => $property->id,
-                    'sell_property_id' => null, 
-                    'type'             => 'DEBIT', // Money Out
-                    'amount'           => $paid,
-                    'payment_date'     => $request->input('payment_date', $date),
-                    'payment_mode'     => $request->input('payment_mode', 'CASH'),
-                    'reference_no'     => $request->invoice_no ?? 'TXN-' . time(),
-                    'remarks'          => 'Initial purchase payment',
-                    'is_deleted'       => 0
-                ]);
+            // Handle payment receipt upload
+            if ($request->hasFile('payment_receipt')) {
+                $file = $request->file('payment_receipt');
+                $filename = time() . '_receipt_' . $file->getClientOriginalName();
+                $data['payment_receipt'] = $file->storeAs('uploads/receipts', $filename, 'public');
             }
 
-            // 3. Upload Documents
-            if ($request->hasFile('documents')) {
-                foreach ($request->file('documents') as $file) {
-                    $filename = time() . '_' . uniqid() . '_' . $file->getClientOriginalName();
-                    $filePath = $file->storeAs("uploads/properties/{$property->id}", $filename, 'public');
+            $property = Property::create($data);
 
-                    PropertyDocument::create([
+            // Create initial transaction if paid amount > 0
+            if ($request->filled('paid_amount') && $request->paid_amount > 0) {
+                $transactionData = [
+                    'property_id'      => $property->id,
+                    'sell_property_id' => null,
+                    'type'             => 'DEBIT',
+                    'amount'           => $request->paid_amount,
+                    'payment_date'     => $request->filled('payment_date') ? $request->payment_date : $data['date'],
+                    'payment_mode'     => $request->payment_mode ?? 'CASH',
+                    'reference_no'     => 'PROP-' . $property->id . '-' . time(),
+                    'transaction_no'   => $request->transaction_no,
+                    'remarks'          => 'Initial property purchase payment',
+                    'is_deleted'       => 0
+                ];
+
+                if ($request->hasFile('payment_receipt')) {
+                    $file = $request->file('payment_receipt');
+                    $filename = time() . '_payment_receipt_' . $file->getClientOriginalName();
+                    $transactionData['payment_receipt'] = $file->storeAs('uploads/payment_receipts', $filename, 'public');
+                }
+
+                Transaction::create($transactionData);
+            }
+
+            // Create EMI schedule if period_years is provided
+            if ($request->filled('period_years') && $request->period_years > 0 && $request->filled('amount_per_month')) {
+                $totalMonths = $request->period_years * 12;
+                $emiAmount = $request->amount_per_month;
+                $startDate = $request->filled('payment_date') ? Carbon::parse($request->payment_date) : Carbon::parse($data['date']);
+                
+                for ($i = 1; $i <= $totalMonths; $i++) {
+                    $dueDate = $startDate->copy()->addMonths($i);
+                    
+                    Emi::create([
                         'property_id' => $property->id,
-                        'doc_name'    => $file->getClientOriginalName(),
-                        'doc_file'    => $filePath,
-                        'is_deleted'  => 0
+                        'emi_number' => $i,
+                        'emi_amount' => $emiAmount,
+                        'due_date' => $dueDate,
+                        'status' => 'PENDING',
+                        'is_deleted' => 0
                     ]);
                 }
             }
 
             DB::commit();
             return response()->json([
-                'message' => 'Inventory created successfully',
-                'data'    => $property->load(['seller', 'documents'])
+                'status' => true,
+                'message' => 'Property created successfully',
+                'data' => $property->load(['seller', 'emis'])
             ], 201);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['message' => 'Error: ' . $e->getMessage()], 500);
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
     // Show Property Details
     public function show($id)
     {
-        $property = Property::with(['documents', 'seller', 'buyer'])
-                            ->where('id', $id)
-                            ->where('is_deleted', 0)
-                            ->firstOrFail();
+        $property = Property::with([
+            'documents', 
+            'seller:id,name,phone,email,address,pan_number,aadhar_number'
+        ])
+        ->where('id', $id)
+        ->where('is_deleted', 0)
+        ->firstOrFail();
 
-        return response()->json($property);
+        // Get all buyers who purchased from this property
+        $buyers = SellProperty::with('buyer:id,name,phone,email')
+            ->where('property_id', $id)
+            ->where('is_deleted', 0)
+            ->get()
+            ->map(function($sale) {
+                return [
+                    'sale_id' => $sale->id,
+                    'buyer' => $sale->buyer,
+                    'area_dismil' => $sale->area_dismil,
+                    'per_dismil_amount' => $sale->per_dismil_amount,
+                    'total_sale_amount' => $sale->total_sale_amount,
+                    'received_amount' => $sale->received_amount,
+                    'pending_amount' => $sale->pending_amount,
+                    'sale_date' => $sale->sale_date,
+                    'status' => $sale->pending_amount <= 0 ? 'FULLY_PAID' : 'PENDING'
+                ];
+            });
+
+        $response = $property->toArray();
+        $response['buyers'] = $buyers;
+        $response['total_buyers'] = $buyers->count();
+        $response['total_sold_area'] = $buyers->sum('area_dismil');
+        $response['remaining_area'] = $property->area_dismil - $buyers->sum('area_dismil');
+
+        return response()->json($response);
     }
 
     // Update Property Details
@@ -282,35 +319,37 @@ class PropertyController extends Controller
     }
     // List Fully Paid Inventory (Ready to Sell)
     public function getReadyToSellProperties(Request $request)
-    {
-        try {
-            // Filter: Only Available & Fully Paid to Vendor
-            $query = Property::where('transaction_type', 'PURCHASE')
-                             ->where('status', 'AVAILABLE')
-                             ->where('due_amount', '<=', 0) // Zero dues
-                             ->where('is_deleted', 0);
+{
+    try {
+        $query = Property::where('transaction_type', 'PURCHASE')
+            ->whereIn('status', ['AVAILABLE', 'BOOKED'])
+            ->where('is_deleted', 0);
 
-            // Optional Search
-            if ($request->filled('search')) {
-                $search = $request->search;
-                $query->where(function($q) use ($search) {
-                    $q->where('title', 'like', "%{$search}%")
-                      ->orWhere('category', 'like', "%{$search}%");
-                });
-            }
-
-            $properties = $query->latest('date')->get(); // No pagination needed for dropdowns usually
-
-            return response()->json([
-                'status' => true,
-                'message' => 'Fetched ready-to-sell inventory',
-                'data' => $properties
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
+        // Optional Search
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                  ->orWhere('category', 'like', "%{$search}%");
+            });
         }
+
+        $properties = $query->latest('date')->get();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Fetched ready-to-sell inventory',
+            'data' => $properties
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => false,
+            'message' => $e->getMessage()
+        ], 500);
     }
+}
+
     // Get 360-Degree Property View
   // Get 360-Degree Property View (Split Ledger)
     public function getCompletePropertyDetails($id)
@@ -323,8 +362,12 @@ class PropertyController extends Controller
             'transactions' => function($q) { 
                 $q->where('is_deleted', 0)->latest('payment_date');
             },
-            'sell_deal' => function($q) { 
-                $q->with(['buyer:id,name,phone,email', 'documents'])
+            'sell_deals' => function($q) { 
+                $q->with(['buyer:id,name,phone,email', 'documents', 'transactions' => function($tq) {
+                    $tq->where('is_deleted', 0)->latest('payment_date');
+                }, 'emis' => function($eq) {
+                    $eq->where('is_deleted', 0)->orderBy('emi_number');
+                }])
                   ->where('is_deleted', 0);
             }
         ])
@@ -347,9 +390,11 @@ class PropertyController extends Controller
 
         // 3. Calculations
         $purchaseCost = $property->total_amount;
-        $saleRevenue  = $property->sell_deal->total_sale_amount ?? 0;
-        $isSold       = ($property->status !== 'AVAILABLE');
-        $profit       = $isSold ? ($saleRevenue - $purchaseCost) : 0;
+        $totalSaleRevenue = $property->sell_deals->sum('total_sale_amount');
+        $totalReceived = $property->sell_deals->sum('received_amount');
+        $totalPending = $property->sell_deals->sum('pending_amount');
+        $isSold = ($property->status === 'SOLD');
+        $profit = $isSold ? ($totalSaleRevenue - $purchaseCost) : 0;
 
         // 4. Response Structure
         $data = [
@@ -360,27 +405,63 @@ class PropertyController extends Controller
                 'category' => $property->category,
                 'status'   => $property->status,
                 'added_on' => $property->date,
+                'total_area' => $property->area_dismil,
+                'sold_area' => $property->sell_deals->sum('area_dismil'),
+                'remaining_area' => $property->area_dismil - $property->sell_deals->sum('area_dismil')
             ],
             'financials' => [
                 'purchase_cost' => $purchaseCost,
-                'sale_revenue'  => $isSold ? $saleRevenue : 'Not Sold',
-                'net_profit'    => $isSold ? $profit : 'N/A',
-                'vendor_due'    => $property->due_amount,
-                'customer_due'  => $property->sell_deal->pending_amount ?? 0
+                'total_sale_revenue' => $totalSaleRevenue,
+                'total_received' => $totalReceived,
+                'total_pending' => $totalPending,
+                'net_profit' => $profit,
+                'vendor_due' => $property->due_amount
             ],
             'parties' => [
                 'vendor' => $property->seller ?? null,
-                'buyer'  => $property->sell_deal->buyer ?? null
+                'buyers' => $property->sell_deals->map(function($deal) {
+                    return [
+                        'sale_id' => $deal->id,
+                        'buyer' => $deal->buyer,
+                        'area_dismil' => $deal->area_dismil,
+                        'sale_amount' => $deal->total_sale_amount,
+                        'received_amount' => $deal->received_amount,
+                        'pending_amount' => $deal->pending_amount,
+                        'payment_status' => $deal->pending_amount <= 0 ? 'FULLY_PAID' : 'PENDING'
+                    ];
+                })
             ],
             'documents' => [
                 'inventory_docs' => $property->documents,
-                'sale_docs'      => $property->sell_deal->documents ?? []
+                'sale_docs' => $property->sell_deals->flatMap(function($deal) {
+                    return $deal->documents->map(function($doc) use ($deal) {
+                        $doc->sale_id = $deal->id;
+                        $doc->buyer_name = $deal->buyer->name ?? 'N/A';
+                        return $doc;
+                    });
+                })
             ],
             // SPLIT LEDGER
             'ledger' => [
-                'purchase_history' => $purchaseTxns, // Paisa Gaya (Out)
-                'sale_history'     => $saleTxns      // Paisa Aaya (In)
-            ]
+                'purchase_history' => $purchaseTxns,
+                'sales_history' => $property->sell_deals->map(function($deal) {
+                    return [
+                        'sale_id' => $deal->id,
+                        'buyer_name' => $deal->buyer->name ?? 'N/A',
+                        'transactions' => $deal->transactions->where('sell_property_id', $deal->id)->values()
+                    ];
+                })
+            ],
+            'emi_details' => $property->sell_deals->map(function($deal) {
+                return [
+                    'sale_id' => $deal->id,
+                    'buyer_name' => $deal->buyer->name ?? 'N/A',
+                    'total_emis' => $deal->emis->count(),
+                    'paid_emis' => $deal->emis->where('status', 'PAID')->count(),
+                    'pending_emis' => $deal->emis->where('status', 'PENDING')->count(),
+                    'emis' => $deal->emis
+                ];
+            })
         ];
 
         return response()->json($data);

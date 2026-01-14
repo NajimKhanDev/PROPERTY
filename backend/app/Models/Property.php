@@ -29,12 +29,17 @@ class Property extends Model
         'paid_amount',
         'due_amount',       
         'area_dismil',
+        'per_dismil_amount',
         'plot_number',
         'khata_number',
         'house_number',
         'floor_number',
         'bhk',
         'super_built_up_area',
+        'period_years',
+        'amount_per_month',
+        'payment_mode',
+        'payment_receipt',
         'status',
         'is_deleted',
     ];
@@ -49,6 +54,8 @@ class Property extends Model
         'total_amount' => 'decimal:2',
         'paid_amount' => 'decimal:2',
         'due_amount' => 'decimal:2',
+        'per_dismil_amount' => 'decimal:2',
+        'amount_per_month' => 'decimal:2',
     ];
 
     // --- RELATIONSHIPS ---
@@ -82,6 +89,16 @@ class Property extends Model
     public function sell_deal()
     {
         return $this->hasOne(SellProperty::class, 'property_id');
+    }
+    
+    public function sell_deals()
+    {
+        return $this->hasMany(SellProperty::class, 'property_id');
+    }
+    
+    public function emis()
+    {
+        return $this->hasMany(Emi::class, 'property_id');
     }
     public function scopePurchases($query)
     {

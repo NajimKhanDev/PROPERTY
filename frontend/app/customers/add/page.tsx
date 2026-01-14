@@ -6,6 +6,7 @@ import Link from "next/link";
 import ProjectApi from "@/app/api/ProjectApis";
 import axiosInstance from "@/app/api/axiosInstance";
 import toast from "react-hot-toast";
+import { useState } from "react";
 
 type FormValues = {
   name: string;
@@ -22,6 +23,10 @@ type FormValues = {
 export default function AddCustomerPage() {
   const router = useRouter();
 
+  const [panFileName, setPanFileName] = useState<string | null>(null);
+  const [aadharFileName, setAadharFileName] = useState<string | null>(null);
+
+
   const {
     register,
     handleSubmit,
@@ -30,7 +35,10 @@ export default function AddCustomerPage() {
     defaultValues: {
       type: "buyer",
     },
+    mode: "onChange",        // 👈 validates while typing
+    reValidateMode: "onChange",
   });
+
 
   const onSubmit = async (values: FormValues) => {
     try {
@@ -105,7 +113,16 @@ export default function AddCustomerPage() {
             {/* Name */}
             <div>
               <label className="block font-medium mb-1">Name</label>
-              <input {...register("name", { required: "Name is required" })} className={inputClass} />
+              <input
+                {...register("name", {
+                  required: "Name is required",
+                  minLength: {
+                    value: 3,
+                    message: "Name must be at least 3 characters",
+                  },
+                })}
+                className={inputClass}
+              />
               {errors.name && <p className={errorText}>{errors.name.message}</p>}
             </div>
 
@@ -114,9 +131,16 @@ export default function AddCustomerPage() {
               <label className="block font-medium mb-1">Email</label>
               <input
                 type="email"
-                {...register("email", { required: "Email is required" })}
+                {...register("email", {
+                  required: "Email is required",
+                  pattern: {
+                    value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                    message: "Enter a valid email address",
+                  },
+                })}
                 className={inputClass}
               />
+
               {errors.email && <p className={errorText}>{errors.email.message}</p>}
             </div>
 
@@ -132,8 +156,14 @@ export default function AddCustomerPage() {
                   },
                 })}
                 inputMode="numeric"
+                maxLength={10}              // 👈 blocks 11th digit
+                onInput={(e: any) => {
+                  e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10);
+                }}
                 className={inputClass}
               />
+
+
               {errors.phone && <p className={errorText}>{errors.phone.message}</p>}
             </div>
 
@@ -154,7 +184,7 @@ export default function AddCustomerPage() {
               <select {...register("type")} className={inputClass}>
                 <option value="buyer">Buyer</option>
                 <option value="seller">Seller</option>
-                <option value="both">Both</option>
+                {/* <option value="both">Both</option> */}
               </select>
             </div>
 
@@ -162,43 +192,106 @@ export default function AddCustomerPage() {
             <div>
               <label className="block font-medium mb-1">PAN Number</label>
               <input
-                {...register("pan_number", { required: "PAN number is required" })}
+                {...register("pan_number", {
+                  required: "PAN number is required",
+                  pattern: {
+                    value: /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/,
+                    message: "Invalid PAN format (ABCDE1234F)",
+                  },
+                })}
                 className={inputClass}
               />
+
               {errors.pan_number && <p className={errorText}>{errors.pan_number.message}</p>}
             </div>
 
             <div>
               <label className="block font-medium mb-1">PAN File</label>
-              <input
-                type="file"
-                accept=".jpg,.jpeg,.png,.pdf"
-                {...register("pan_file", { required: "PAN file is required" })}
-                className="block w-full text-sm text-gray-600"
-              />
-              {errors.pan_file && <p className={errorText}>{errors.pan_file.message}</p>}
+
+              <label className="flex items-center justify-between px-4 py-2 border border-gray-300 rounded-md cursor-pointer hover:border-blue-400 bg-white">
+                <span className="text-sm text-gray-600 truncate">
+                  {panFileName || "Choose PAN file (.jpg, .png, .pdf)"}
+                </span>
+                <span className="text-xs bg-blue-600 text-white px-3 py-1 rounded-md">
+                  Browse
+                </span>
+
+                <input
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.pdf"
+                  {...register("pan_file", {
+                    required: "PAN file is required",
+                    onChange: (e) => {
+                      setPanFileName(e.target.files?.[0]?.name || null);
+                    },
+                  })}
+                  className="hidden"
+                />
+              </label>
+
+              {errors.pan_file && (
+                <p className={errorText}>{errors.pan_file.message}</p>
+              )}
             </div>
+
 
             {/* Aadhaar */}
             <div>
               <label className="block font-medium mb-1">Aadhaar Number</label>
+
               <input
-                {...register("aadhar_number", { required: "Aadhaar number is required" })}
+                type="tel"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={12}                 // 👈 prevents 13th digit
+                {...register("aadhar_number", {
+                  required: "Aadhaar number is required",
+                  pattern: {
+                    value: /^[0-9]{12}$/,
+                    message: "Aadhaar must be exactly 12 digits",
+                  },
+                })}
+                onInput={(e: any) => {
+                  e.target.value = e.target.value.replace(/\D/g, "").slice(0, 12);
+                }}
                 className={inputClass}
               />
-              {errors.aadhar_number && <p className={errorText}>{errors.aadhar_number.message}</p>}
+
+              {errors.aadhar_number && (
+                <p className={errorText}>{errors.aadhar_number.message}</p>
+              )}
             </div>
+
 
             <div>
               <label className="block font-medium mb-1">Aadhaar File</label>
-              <input
-                type="file"
-                accept=".jpg,.jpeg,.png,.pdf"
-                {...register("aadhar_file", { required: "Aadhaar file is required" })}
-                className="block w-full text-sm text-gray-600"
-              />
-              {errors.aadhar_file && <p className={errorText}>{errors.aadhar_file.message}</p>}
+
+              <label className="flex items-center justify-between px-4 py-2 border border-gray-300 rounded-md cursor-pointer hover:border-blue-400 bg-white">
+                <span className="text-sm text-gray-600 truncate">
+                  {aadharFileName || "Choose Aadhaar file (.jpg, .png, .pdf)"}
+                </span>
+                <span className="text-xs bg-blue-600 text-white px-3 py-1 rounded-md">
+                  Browse
+                </span>
+
+                <input
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.pdf"
+                  {...register("aadhar_file", {
+                    required: "Aadhaar file is required",
+                    onChange: (e) => {
+                      setAadharFileName(e.target.files?.[0]?.name || null);
+                    },
+                  })}
+                  className="hidden"
+                />
+              </label>
+
+              {errors.aadhar_file && (
+                <p className={errorText}>{errors.aadhar_file.message}</p>
+              )}
             </div>
+
 
             {/* Actions */}
             <div className="flex gap-4 pt-4 justify-end">

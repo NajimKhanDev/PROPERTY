@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import axiosInstance from "@/app/api/axiosInstance";
 import ProjectApi from "@/app/api/ProjectApis";
+import toast from "react-hot-toast";
 
 interface Customer {
   id: number;
@@ -19,20 +20,35 @@ export default function BuyPropertyPage() {
   const [loading, setLoading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-
   const [formData, setFormData] = useState({
     seller_id: "",
+    transaction_type: "PURCHASE",
+
+    // basic
     title: "",
-    category: "FLAT",
-    rate: "",
-    gst_percentage: "",
-    other_expenses: "",
+    category: "LAND",
+    address: "",
+
+    // plot & payment
+    plot_number: "",
+    khata_number: "",
+    area_dismil: 0,
+    per_dismil_amount: "",
+    total_amount: 0,
     paid_amount: "",
-    payment_mode: "ONLINE",
-    payment_date: "",
+    due_amount: 0,
+    period_years: "1",
+    amount_per_month: 0,
+    payment_mode: "",
+    transaction_no: "",
+
+    // other
     invoice_no: "",
     date: "",
-    documents: [] as File[],
+    payment_date: "",
+
+    // files
+    payment_receipt: null as File | null,
   });
 
   /* ================= LOAD SELLERS ================= */
@@ -46,71 +62,75 @@ export default function BuyPropertyPage() {
     });
   }, []);
 
+  /* ================= AUTO CALCULATION ================= */
+  useEffect(() => {
+    const dismil = Number(formData.area_dismil || 0);
+    const per = Number(formData.per_dismil_amount || 0);
+    const paid = Number(formData.paid_amount || 0);
+    const years = Number(formData.period_years || 1);
+
+    const total = dismil * per;
+    const due = total - paid;
+
+    const rawPerMonth = years > 0 ? due / (years * 12) : 0;
+    const perMonth = Math.round(rawPerMonth); // ✅ round off
+
+    setFormData((prev) => ({
+      ...prev,
+      total_amount: total,
+      due_amount: due,
+      amount_per_month: perMonth,
+    }));
+  }, [
+    formData.area_dismil,
+    formData.per_dismil_amount,
+    formData.paid_amount,
+    formData.period_years,
+  ]);
+
+
   /* ================= SUBMIT ================= */
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    try {
-      setLoading(true);
-
-      const fd = new FormData();
-      fd.append("transaction_type", "PURCHASE");
-      fd.append("seller_id", formData.seller_id);
-      fd.append("title", formData.title);
-      fd.append("category", formData.category);
-      fd.append("quantity", "1");
-      fd.append("rate", formData.rate);
-      fd.append("gst_percentage", formData.gst_percentage);
-      fd.append("other_expenses", formData.other_expenses);
-      fd.append("paid_amount", formData.paid_amount);
-      fd.append("payment_mode", formData.payment_mode);
-      fd.append("payment_date", formData.payment_date);
-      fd.append("invoice_no", formData.invoice_no);
-      fd.append("date", formData.date);
-
-      formData.documents.forEach((file) =>
-        fd.append("documents[]", file)
-      );
-
-      await axiosInstance.post(ProjectApi.create_properties, fd);
-      router.push("/properties");
-    } catch (err) {
-      console.error(err);
-      alert("Failed to buy property");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const confirmSubmit = async () => {
     try {
       setLoading(true);
 
       const fd = new FormData();
-      fd.append("transaction_type", "PURCHASE");
-      fd.append("seller_id", formData.seller_id);
-      fd.append("title", formData.title);
-      fd.append("category", formData.category);
-      fd.append("quantity", "1");
-      fd.append("rate", formData.rate);
-      fd.append("gst_percentage", formData.gst_percentage);
-      fd.append("other_expenses", formData.other_expenses);
-      fd.append("paid_amount", formData.paid_amount);
-      fd.append("payment_mode", formData.payment_mode);
-      fd.append("payment_date", formData.payment_date);
-      fd.append("invoice_no", formData.invoice_no);
-      fd.append("date", formData.date);
 
-      formData.documents.forEach((file) =>
-        fd.append("documents[]", file)
-      );
+      Object.entries(formData).forEach(([key, value]) => {
+        if (key === "payment_receipt") return;
+        fd.append(key, String(value ?? ""));
+      });
+
+      if (formData.payment_receipt) {
+        fd.append("payment_receipt", formData.payment_receipt);
+      }
 
       await axiosInstance.post(ProjectApi.create_properties, fd);
 
+      toast.success("Property purchased successfully");
       router.push("/properties");
-    } catch (err) {
+
+    } catch (err: any) {
       console.error(err);
-      alert("Failed to buy property");
+
+      // ✅ Laravel validation errors
+      if (err.response?.data?.errors) {
+        const errors = err.response.data.errors;
+
+        Object.values(errors).forEach((messages: any) => {
+          if (Array.isArray(messages)) {
+            messages.forEach((msg) => toast.error(msg));
+          }
+        });
+      }
+      // ✅ Fallback message
+      else if (err.response?.data?.message) {
+        toast.error(err.response.data.message);
+      }
+      else {
+        toast.error("Failed to buy property");
+      }
+
     } finally {
       setLoading(false);
       setConfirmOpen(false);
@@ -118,279 +138,298 @@ export default function BuyPropertyPage() {
   };
 
 
-  /* ================= INPUT STYLE ================= */
   const inputClass =
-    "w-full px-3 py-2 rounded-md bg-white " +
-    "border border-gray-300 " +
-    "focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500";
+    "w-full px-3 py-2 rounded-md border border-gray-300 bg-white " +
+    "focus:outline-none focus:ring-2 focus:ring-blue-500";
+
+  const labelClass = "block text-sm font-medium text-gray-700 mb-1";
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 pt-10 text-black">
-      <div className="max-w-2xl mx-auto">
-        {/* HEADER */}
-        <Link href="/properties" className="text-sm text-blue-600 hover:text-blue-800">
+    <div className="min-h-screen bg-gray-50 px-4 py-10 text-black">
+      <div className="max-w-5xl mx-auto">
+        <Link href="/properties" className="text-sm text-blue-600">
           ← Back to Properties
         </Link>
 
-        <h1 className="text-2xl font-bold text-gray-800 mt-2 mb-6 text-center">
+        <h1 className="text-2xl font-bold text-center my-6">
           Buy Property
         </h1>
 
-        {/* FORM CARD */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
             setConfirmOpen(true);
           }}
-          className="bg-white rounded-2xl shadow-md p-8 space-y-5 text-sm"
+          className="bg-white p-8 rounded-xl shadow space-y-10"
         >
-          {/* Seller */}
-          <div>
-            <label className="block font-medium text-gray-700 mb-1">
-              Seller
-            </label>
-            <select
-              required
-              className={inputClass}
-              value={formData.seller_id}
-              onChange={(e) =>
-                setFormData({ ...formData, seller_id: e.target.value })
-              }
-            >
-              <option value="">Select Seller</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
 
-          {/* Title */}
-          <div>
-            <label className="block font-medium text-gray-700 mb-1">
-              Property Title
-            </label>
-            <input
-              className={inputClass}
-              placeholder="2 BHK Flat – Vijay Nagar"
-              onChange={(e) =>
-                setFormData({ ...formData, title: e.target.value })
-              }
-              required
-            />
-          </div>
+          {/* ================= BASIC INFO ================= */}
+          <section>
+            <h2 className="font-semibold text-lg mb-4">Basic Information</h2>
 
-          {/* Category */}
-          <div>
-            <label className="block font-medium text-gray-700 mb-1">
-              Property Category
-            </label>
-            <select
-              className={inputClass}
-              value={formData.category}
-              onChange={(e) =>
-                setFormData({ ...formData, category: e.target.value })
-              }
-            >
-              {['LAND', 'FLAT', 'HOUSE', 'COMMERCIAL', 'AGRICULTURE'].map(
-                (c) => (
-                  <option key={c}>{c}</option>
-                )
-              )}
-            </select>
-          </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Seller *</label>
+                <select
+                  className={inputClass}
+                  required
+                  onChange={(e) =>
+                    setFormData({ ...formData, seller_id: e.target.value })
+                  }
+                >
+                  <option value="">Select Seller</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
 
-          {/* Rate */}
-          <div>
-            <label className="block font-medium text-gray-700 mb-1">
-              Purchase Price
-            </label>
-            <input
-              type="number"
-              className={inputClass}
-              placeholder="4500000"
-              onChange={(e) =>
-                setFormData({ ...formData, rate: e.target.value })
-              }
-              required
-            />
-          </div>
+              <div>
+                <label className={labelClass}>Category</label>
+                <select
+                  className={inputClass}
+                  onChange={(e) =>
+                    setFormData({ ...formData, category: e.target.value })
+                  }
+                >
+                  {["LAND", "FLAT", "HOUSE"].map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
 
-          {/* GST */}
-          <div>
-            <label className="block font-medium text-gray-700 mb-1">
-              GST Percentage
-            </label>
-            <input
-              type="number"
-              className={inputClass}
-              placeholder="5"
-              onChange={(e) =>
-                setFormData({ ...formData, gst_percentage: e.target.value })
-              }
-            />
-          </div>
+              <div className="md:col-span-2">
+                <label className={labelClass}>Property Title</label>
+                <input
+                  className={inputClass}
+                  required
+                  placeholder="Enter property title"
+                  value={formData.title}
+                  onChange={(e) =>
+                    setFormData({ ...formData, title: e.target.value })
+                  }
+                />
 
-          {/* Other Expenses */}
-          <div>
-            <label className="block font-medium text-gray-700 mb-1">
-              Other Expenses
-            </label>
-            <input
-              type="number"
-              className={inputClass}
-              placeholder="50000"
-              onChange={(e) =>
-                setFormData({ ...formData, other_expenses: e.target.value })
-              }
-            />
-          </div>
+              </div>
 
-          {/* Paid Amount */}
-          <div>
-            <label className="block font-medium text-gray-700 mb-1">
-              Paid Amount
-            </label>
-            <input
-              type="number"
-              className={inputClass}
-              placeholder="1000000"
-              onChange={(e) =>
-                setFormData({ ...formData, paid_amount: e.target.value })
-              }
-            />
-          </div>
+              <div className="md:col-span-2">
+                <label className={labelClass}>Property Address</label>
+                <textarea
+                  rows={3}
+                  className={inputClass}
+                  onChange={(e) =>
+                    setFormData({ ...formData, address: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+          </section>
 
-          {/* Payment Mode */}
-          <div>
-            <label className="block font-medium text-gray-700 mb-1">
-              Payment Mode
-            </label>
-            <select
-              className={inputClass}
-              value={formData.payment_mode}
-              onChange={(e) =>
-                setFormData({ ...formData, payment_mode: e.target.value })
-              }
-            >
-              {["ONLINE", "CASH", "CHEQUE"].map((m) => (
-                <option key={m}>{m}</option>
-              ))}
-            </select>
-          </div>
+          {/* ================= PAYMENT & PLOT ================= */}
+          <section>
+            <h2 className="font-semibold text-lg mb-4">Payment & Plot</h2>
 
-          {/* Payment Date */}
-          <div>
-            <label className="block font-medium text-gray-700 mb-1">
-              Payment Date
-            </label>
-            <input
-              type="date"
-              className={inputClass}
-              onChange={(e) =>
-                setFormData({ ...formData, payment_date: e.target.value })
-              }
-            />
-          </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-          {/* Invoice */}
-          <div>
-            <label className="block font-medium text-gray-700 mb-1">
-              Invoice Number
-            </label>
-            <input
-              className={inputClass}
-              placeholder="INV-002"
-              onChange={(e) =>
-                setFormData({ ...formData, invoice_no: e.target.value })
-              }
-            />
-          </div>
+              <div>
+                <label className={labelClass}>Plot Number *</label>
+                <input className={inputClass}
+                  onChange={(e) =>
+                    setFormData({ ...formData, plot_number: e.target.value })
+                  }
+                />
+              </div>
 
-          {/* Date */}
-          <div>
-            <label className="block font-medium text-gray-700 mb-1">
-              Transaction Date
-            </label>
-            <input
-              type="date"
-              className={inputClass}
-              onChange={(e) =>
-                setFormData({ ...formData, date: e.target.value })
-              }
-            />
-          </div>
+              <div>
+                <label className={labelClass}>Khata Number *</label>
+                <input className={inputClass}
+                  onChange={(e) =>
+                    setFormData({ ...formData, khata_number: e.target.value })
+                  }
+                />
+              </div>
 
-          {/* Documents */}
-          <div>
-            <label className="block font-medium text-gray-700 mb-1">
-              Documents
-            </label>
-            <input
-              type="file"
-              multiple
-              className="block w-full text-sm text-gray-600"
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  documents: Array.from(e.target.files || []),
-                })
-              }
-            />
-          </div>
+              <div>
+                <label className={labelClass}>
+                  Dismil <span className="text-red-500">*</span>
+                </label>
 
-          {/* ACTIONS */}
-          <div className="flex justify-end gap-3 pt-4">
-            <Link
-              href="/properties"
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-            >
-              Cancel
-            </Link>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder="Enter area in dismil"
+                  className={inputClass}
+                  onChange={(e) => {
+                    const value = Math.max(0, Number(e.target.value));
+                    setFormData({ ...formData, area_dismil: value });
+                  }}
+                />
+              </div>
 
-            <button
-              disabled={loading}
-              className="px-5 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-            >
-              {loading ? "Saving..." : "Buy Property"}
-            </button>
-          </div>
+
+              <div>
+                <label className={labelClass}>Per Dismil Amount *</label>
+                <input type="number" className={inputClass}
+                  onChange={(e) =>
+                    setFormData({ ...formData, per_dismil_amount: e.target.value })
+                  }
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>Total Amount</label>
+                <input readOnly className={`${inputClass} bg-gray-100`}
+                  value={formData.total_amount.toFixed(2)}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>Pay Amount</label>
+                <input type="number" className={inputClass}
+                  onChange={(e) =>
+                    setFormData({ ...formData, paid_amount: e.target.value })
+                  }
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>Due Amount</label>
+                <input readOnly className={`${inputClass} bg-gray-100`}
+                  value={formData.due_amount.toFixed(2)}
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>Period (Years)</label>
+                <select
+                  className={inputClass}
+                  onChange={(e) =>
+                    setFormData({ ...formData, period_years: e.target.value })
+                  }
+                >
+                  {[1, 2, 3, 5, 10].map((y) => (
+                    <option key={y} value={y}>{y} Year</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className={labelClass}>Amount / Month</label>
+                <input readOnly className={`${inputClass} bg-gray-100`}
+                  value={formData.amount_per_month.toFixed(2)}
+                />
+              </div>
+
+              <div className="md:col-span-3">
+                <label className={labelClass}>Payment Mode</label>
+                <select
+                  className={inputClass}
+                  onChange={(e) =>
+                    setFormData({ ...formData, payment_mode: e.target.value })
+                  }
+                >
+                  <option value="">Select Payment Mode</option>
+                  <option value="BANK">Bank</option>
+                  <option value="CASH">Cash</option>
+                  <option value="ONLINE">Online</option>
+                </select>
+              </div>
+
+              {(formData.payment_mode === "BANK" ||
+                formData.payment_mode === "ONLINE") && (
+                  <div className="md:col-span-3">
+                    <label className={labelClass}>
+                      Transaction No <span className="text-red-500">*</span>
+                    </label>
+
+                    <input
+                      type="text"
+                      placeholder="Enter transaction number"
+                      className={inputClass}
+                      required
+                      onChange={(e) =>
+                        setFormData({ ...formData, transaction_no: e.target.value })
+                      }
+                    />
+                  </div>
+                )}
+
+
+              <div className="md:col-span-3">
+                <label className={`${labelClass} mb-1 block`}>
+                  Payment Receipt
+                  <span className="text-red-500 ml-1">*</span>
+                </label>
+
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.pdf"
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        payment_receipt: e.target.files?.[0] || null,
+                      })
+                    }
+                    className="
+        w-full rounded-lg border border-gray-300 bg-white
+        px-4 py-2 text-sm text-gray-700
+        file:mr-4 file:rounded-md file:border-0
+        file:bg-blue-600 file:px-4 file:py-2
+        file:text-sm file:font-medium file:text-white
+        hover:file:bg-blue-700
+        focus:outline-none focus:ring-2 focus:ring-blue-500
+      "
+                  />
+                </div>
+
+                <p className="mt-1 text-xs text-gray-500">
+                  Accepted formats: JPG, PNG, PDF · Max size 5MB
+                </p>
+              </div>
+
+            </div>
+          </section>
+
+          {/* ================= ACTION ================= */}
+          <button
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-3 rounded-md font-medium hover:bg-blue-700"
+          >
+            {loading ? "Saving..." : "Buy Property"}
+          </button>
         </form>
       </div>
 
       {/* ================= CONFIRM MODAL ================= */}
       {confirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold text-gray-800">
-              Confirm Purchase
-            </h2>
+        <div className="fixed inset-0 z-[999] flex items-center justify-center">
+          {/* BLUR + DIM OVERLAY */}
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-md"
+            onClick={() => setConfirmOpen(false)}
+          />
 
-            <p className="text-sm text-gray-600 mt-2">
-              Are you sure you want to buy this property?
+          {/* MODAL */}
+          <div className="relative bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm space-y-4">
+            <p className="font-semibold text-gray-800">
+              Confirm property purchase?
             </p>
 
-            <div className="mt-4 space-y-1 text-sm text-gray-700">
-              <p><strong>Title:</strong> {formData.title}</p>
-              <p><strong>Price:</strong> ₹{Number(formData.rate || 0).toLocaleString()}</p>
-              <p><strong>Paid:</strong> ₹{Number(formData.paid_amount || 0).toLocaleString()}</p>
-            </div>
-
-            <div className="flex justify-end gap-3 mt-6">
+            <div className="flex justify-end gap-3">
               <button
                 onClick={() => setConfirmOpen(false)}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                className="px-4 py-2 rounded-md bg-gray-100 hover:bg-gray-200"
               >
                 Cancel
               </button>
 
               <button
                 onClick={confirmSubmit}
-                disabled={loading}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
               >
-                {loading ? "Saving..." : "Confirm"}
+                Confirm
               </button>
             </div>
           </div>

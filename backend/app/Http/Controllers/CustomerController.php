@@ -13,11 +13,11 @@ use Illuminate\Validation\Rule;
 class CustomerController extends Controller
 {
     // Fetch active customers
-    public function index()
+    public function index(Request $request)
     {
         try {
             // Get non-deleted records
-            $customers = Customer::where('is_deleted', 0)->latest()->paginate(10);
+            $customers = Customer::where('is_deleted', 0)->latest()->paginate($request->input('per_page', 10));
             return response()->json(['status' => true, 'data' => $customers]);
         } catch (\Exception $e) {
             return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
@@ -32,7 +32,7 @@ class CustomerController extends Controller
 
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'phone' => 'required|digits:10', // Duplicates allowed
+            'phone' => ['required', 'digits:10', $uniqueRule],
             'type' => 'required|in:SELLER,BUYER,BOTH',
             'email' => ['nullable', 'email', $uniqueRule],
             
@@ -51,6 +51,7 @@ class CustomerController extends Controller
             'pan_file_path' => 'nullable|file|mimes:jpg,png,pdf|max:2048',
             'aadhar_file_path' => 'nullable|file|mimes:jpg,png,pdf|max:2048',
         ], [
+            'phone.unique' => 'Phone number already registered.',
             'pan_number.unique' => 'PAN already registered.',
             'aadhar_number.unique' => 'Aadhar already registered.',
             'pan_number.different' => 'PAN matches Aadhar.',
@@ -184,7 +185,7 @@ class CustomerController extends Controller
 
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string',
-            'phone' => 'sometimes|numeric|digits:10', // Duplicates allowed
+            'phone' => ['sometimes', 'numeric', 'digits:10', $uniqueRule],
             'type' => 'sometimes|in:SELLER,BUYER,BOTH',
             'email' => ['nullable', 'email', $uniqueRule],
             
@@ -203,6 +204,7 @@ class CustomerController extends Controller
             'pan_file_path' => 'nullable|file|mimes:jpg,png,pdf|max:2048',
             'aadhar_file_path' => 'nullable|file|mimes:jpg,png,pdf|max:2048',
         ], [
+            'phone.unique' => 'Phone number already taken.',
             'pan_number.unique' => 'PAN already taken.',
             'aadhar_number.unique' => 'Aadhar already taken.',
             'pan_number.different' => 'PAN matches Aadhar.',

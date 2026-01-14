@@ -35,4 +35,8 @@ class SellProperty extends Model
         // Documents linked via 'sell_property_id' in 'property_documents' table
         return $this->hasMany(PropertyDocument::class, 'sell_property_id');
     }
+    
+    public function emis() {
+        return $this->hasMany(SellEmi::class, 'sell_property_id');
+    }
 }

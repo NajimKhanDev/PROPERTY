@@ -11,6 +11,7 @@ use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SellPropertyController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EmiController;
 
 // Auth routes
 
@@ -67,17 +68,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('property-docs/{id}', [PropertyDocumentController::class, 'destroy']);
 
     Route::get('/properties/ready-to-sell', [PropertyController::class, 'getReadyToSellProperties']);
-    
+
     Route::get('properties', [PropertyController::class, 'index']);
     Route::post('properties', [PropertyController::class, 'store']);
     // Property Master Report
-Route::get('/properties/master-view/{id}', [PropertyController::class, 'getCompletePropertyDetails']);
+    Route::get('/properties/master-view/{id}', [PropertyController::class, 'getCompletePropertyDetails']);
     Route::get('properties/{id}', [PropertyController::class, 'show']);
     Route::put('properties/{id}', [PropertyController::class, 'update']);
     Route::delete('properties/{id}', [PropertyController::class, 'destroy']);
 
     //Transactions
     Route::get('/transactions/all', [TransactionController::class, 'getAllTransactions']);
+    Route::get('/transactions/buy', [TransactionController::class, 'getBuyTransactions']);
+    Route::get('/transactions/sell', [TransactionController::class, 'getSellTransactions']);
     Route::get('/transactions', [TransactionController::class, 'index']);
     Route::post('/transactions', [TransactionController::class, 'store']);
     Route::get('/transactions/{id}', [TransactionController::class, 'show']);
@@ -112,8 +115,18 @@ Route::get('/properties/master-view/{id}', [PropertyController::class, 'getCompl
     // 1. Master List of Properties with Profit/Status
     Route::get('/reports/properties/all', [App\Http\Controllers\PropertyReportController::class, 'getAllPropertiesReport']);
 
-// 2. Specific Property Detailed File
-Route::get('/reports/properties/{id}', [App\Http\Controllers\PropertyReportController::class, 'getSpecificPropertyReport']);
+    // 2. Specific Property Detailed File
+    Route::get('/reports/properties/{id}', [App\Http\Controllers\PropertyReportController::class, 'getSpecificPropertyReport']);
 
-Route::get('/dashboard', [DashboardController::class, 'getDashboardData']);
+    Route::get('/dashboard', [DashboardController::class, 'getDashboardData']);
+
+    // EMI Routes
+    Route::get('/emis', [EmiController::class, 'index']);
+    Route::post('/emis/{id}/pay', [EmiController::class, 'payEmi']);
+    Route::post('/emis/{id}/unpay', [EmiController::class, 'unpayEmi']);
+    
+    // Sell EMI Routes
+    Route::get('/sell-emis', [EmiController::class, 'sellEmisIndex']);
+    Route::post('/sell-emis/{id}/pay', [EmiController::class, 'paySellEmi']);
+    Route::post('/sell-emis/{id}/unpay', [EmiController::class, 'unpaySellEmi']);
 });

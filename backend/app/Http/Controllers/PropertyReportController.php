@@ -19,7 +19,7 @@ class PropertyReportController extends Controller
         // 1. Base Query with Relations
         $query = Property::with([
             'seller:id,name,phone',        // Who sold it to us
-            'sell_deal.buyer:id,name,phone' // Who bought it from us
+            'sell_deals.buyer:id,name,phone' // Who bought it from us (multiple buyers)
         ])->where('is_deleted', 0);
 
         // 2. Filter: Search (Title, Invoice, Party Name)
@@ -29,7 +29,7 @@ class PropertyReportController extends Controller
                 $q->where('title', 'like', "%{$search}%")
                   ->orWhere('invoice_no', 'like', "%{$search}%")
                   ->orWhereHas('seller', fn($s) => $s->where('name', 'like', "%{$search}%"))
-                  ->orWhereHas('sell_deal.buyer', fn($b) => $b->where('name', 'like', "%{$search}%"));
+                  ->orWhereHas('sell_deals.buyer', fn($b) => $b->where('name', 'like', "%{$search}%"));
             });
         }
 
@@ -55,12 +55,25 @@ class PropertyReportController extends Controller
         $data = collect($properties->items())->map(function($p) {
             
             $purchaseCost = $p->total_amount;
-            $salePrice    = $p->sell_deal->total_sale_amount ?? 0;
-            $isSold       = ($p->status === 'SOLD' || $p->status === 'BOOKED');
+            $totalSalePrice = $p->sell_deals->sum('total_sale_amount');
+            $totalReceived = $p->sell_deals->sum('received_amount');
+            $totalPending = $p->sell_deals->sum('pending_amount');
+            $soldArea = $p->sell_deals->sum('area_dismil');
+            $remainingArea = $p->area_dismil - $soldArea;
+            $isSold = ($p->status === 'SOLD');
+            $isPartialSold = ($p->status === 'BOOKED');
+
+            // Calculate proportional cost for sold area
+            $proportionalCost = ($soldArea > 0 && $p->area_dismil > 0) ? 
+                ($purchaseCost * ($soldArea / $p->area_dismil)) : 0;
 
             // Calculate Profit
-            $profit = $isSold ? ($salePrice - $purchaseCost) : 0;
-            $margin = ($isSold && $purchaseCost > 0) ? round(($profit/$purchaseCost)*100, 1) : 0;
+            $profit = ($isSold || $isPartialSold) ? ($totalSalePrice - $proportionalCost) : 0;
+            $margin = (($isSold || $isPartialSold) && $proportionalCost > 0) ? 
+                round(($profit/$proportionalCost)*100, 1) : 0;
+
+            // Get buyer names
+            $buyerNames = $p->sell_deals->pluck('buyer.name')->filter()->implode(', ');
 
             return [
                 'id'             => $p->id,
@@ -73,16 +86,23 @@ class PropertyReportController extends Controller
                 'purchased_from' => $p->seller->name ?? 'N/A',
                 'purchase_date'  => $p->date,
                 'cost_price'     => $purchaseCost,
-                'vendor_due'     => $p->due_amount, // Do we still owe vendor?
+                'vendor_due'     => $p->due_amount,
+
+                // Area Details
+                'total_area'     => $p->area_dismil,
+                'sold_area'      => $soldArea,
+                'remaining_area' => $remainingArea,
 
                 // Sale Side
-                'sold_to'        => $p->sell_deal->buyer->name ?? 'Unsold',
-                'sale_price'     => $isSold ? $salePrice : '-',
-                'sale_due'       => $p->sell_deal->pending_amount ?? 0, // Customer owes us?
+                'sold_to'        => $buyerNames ?: 'Unsold',
+                'total_buyers'   => $p->sell_deals->count(),
+                'total_sale_price' => ($isSold || $isPartialSold) ? $totalSalePrice : '-',
+                'total_received' => $totalReceived,
+                'total_pending'  => $totalPending,
 
                 // Analysis
-                'profit_loss'    => $isSold ? $profit : '-',
-                'margin_pct'     => $isSold ? $margin.'%' : '-'
+                'profit_loss'    => ($isSold || $isPartialSold) ? $profit : '-',
+                'margin_pct'     => ($isSold || $isPartialSold) ? $margin.'%' : '-'
             ];
         });
 

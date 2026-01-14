@@ -6,6 +6,8 @@ import Link from "next/link";
 import axiosInstance from "@/app/api/axiosInstance";
 import ProjectApi from "@/app/api/ProjectApis";
 
+/* ================= TYPES ================= */
+
 interface Customer {
   id: number;
   name: string;
@@ -16,16 +18,27 @@ interface Property {
   id: number;
   title: string;
   category: string;
-  owner_id: number;
 }
+
+interface PropertyDetails {
+  id: number;
+  title: string;
+  category: string;
+  address: string;
+  area_dismil: any;
+  remaining_area: number;
+  total_amount: string;
+}
+
+/* ================= COMPONENT ================= */
 
 export default function SellPropertyPage() {
   const router = useRouter();
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
-  const [selectedProperty, setSelectedProperty] =
-    useState<Property | null>(null);
+  const [propertyDetails, setPropertyDetails] =
+    useState<PropertyDetails | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [openConfirm, setOpenConfirm] = useState(false);
@@ -33,17 +46,27 @@ export default function SellPropertyPage() {
   const [formData, setFormData] = useState({
     property_id: "",
     customer_id: "",
-    sale_rate: "",
-    gst_percentage: "",
+
+    plot_number: "",
+    khata_number: "",
+    area_dismil: 0,
+    per_dismil_amount: "",
+    total_amount: 0,
     paid_amount: "",
-    document: null as File | null,
+    due_amount: 0,
+    period_years: "1",
+    amount_per_month: 0,
+    payment_mode: "",
+    transaction_no: "",
+
+    payment_receipt: null as File | null,
   });
 
   /* ================= LOAD PROPERTIES ================= */
   useEffect(() => {
-    axiosInstance.get(ProjectApi.all_properties_ready_to_sell).then((res) => {
-      setProperties(res.data.data || []);
-    });
+    axiosInstance
+      .get(ProjectApi.all_properties_ready_to_sell)
+      .then((res) => setProperties(res.data.data || []));
   }, []);
 
   /* ================= LOAD BUYERS ================= */
@@ -57,26 +80,59 @@ export default function SellPropertyPage() {
     });
   }, []);
 
+  /* ================= AUTO CALCULATION ================= */
+  useEffect(() => {
+    const dismil = Number(formData.area_dismil || 0);
+    const per = Number(formData.per_dismil_amount || 0);
+    const paid = Number(formData.paid_amount || 0);
+    const years = Number(formData.period_years || 1);
+
+    const total = dismil * per;
+    const due = total - paid;
+
+    const rawPerMonth = years > 0 ? due / (years * 12) : 0;
+    const perMonth = Math.round(rawPerMonth); // 👈 round off
+
+    setFormData((prev) => ({
+      ...prev,
+      total_amount: total,
+      due_amount: due,
+      amount_per_month: perMonth,
+    }));
+  }, [
+    formData.area_dismil,
+    formData.per_dismil_amount,
+    formData.paid_amount,
+    formData.period_years,
+  ]);
+
   /* ================= SUBMIT SALE ================= */
   const submitSale = async () => {
-    if (!selectedProperty) return;
+
+    if (
+      (formData.payment_mode === "BANK" ||
+        formData.payment_mode === "ONLINE") &&
+      !formData.transaction_no
+    ) {
+      alert("Transaction number is required");
+      return;
+    }
+
 
     try {
       setLoading(true);
 
       const fd = new FormData();
-      fd.append("property_id", formData.property_id);
-      fd.append("customer_id", formData.customer_id);
-      fd.append("sale_rate", formData.sale_rate);
+      Object.entries(formData).forEach(([key, value]) => {
+        if (key === "payment_receipt") return;
+        fd.append(key, String(value ?? ""));
+      });
 
-      if (formData.gst_percentage)
-        fd.append("gst_percentage", formData.gst_percentage);
+      if (formData.payment_receipt) {
+        fd.append("payment_receipt", formData.payment_receipt);
+      }
 
-      if (formData.paid_amount)
-        fd.append("paid_amount", formData.paid_amount);
-
-      if (formData.document)
-        fd.append("document", formData.document);
+      // console.log(fd, "fd=========>")
 
       await axiosInstance.post(ProjectApi.sell_property, fd);
       router.push("/properties");
@@ -89,27 +145,23 @@ export default function SellPropertyPage() {
     }
   };
 
+
+  // console.log(propertyDetails,"propertyDetails=========>")
   const inputClass =
-    "w-full px-3 py-2 rounded-md border border-gray-300 text-sm " +
-    "focus:outline-none focus:ring-2 focus:ring-blue-500";
+    "w-full px-3 py-2 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-10 text-black">
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="max-w-4xl mx-auto space-y-6">
+
         {/* HEADER */}
         <div>
-          <Link
-            href="/properties"
-            className="text-sm text-blue-600 hover:underline"
-          >
+          <Link href="/properties" className="text-sm text-blue-600">
             ← Back to Properties
           </Link>
-
-          <h1 className="text-2xl font-bold mt-2">
-            Sell Property
-          </h1>
+          <h1 className="text-2xl font-bold mt-2">Sell Property</h1>
           <p className="text-sm text-gray-500">
-            Complete the sale details and confirm the transaction
+            Complete selling details and payment structure
           </p>
         </div>
 
@@ -119,21 +171,42 @@ export default function SellPropertyPage() {
             e.preventDefault();
             setOpenConfirm(true);
           }}
-          className="bg-white rounded-xl shadow-sm border p-8 space-y-6"
+          className="bg-white rounded-xl shadow p-8 space-y-8"
         >
           {/* PROPERTY */}
           <Field label="Property">
             <select
               required
               className={inputClass}
-              value={formData.property_id}
-              onChange={(e) => {
-                const prop = properties.find(
-                  (p) => p.id === Number(e.target.value)
-                );
-                setSelectedProperty(prop || null);
-                setFormData({ ...formData, property_id: e.target.value });
+              onChange={async (e) => {
+                const id = e.target.value;
+
+                if (!id) return;
+
+                const res = await axiosInstance.get(`/properties/${id}`);
+                const data = res.data;
+
+                setPropertyDetails(data);
+
+                setFormData((prev) => ({
+                  ...prev,
+                  property_id: id,
+
+                  // ✅ AUTO-FILL
+                  plot_number: data.plot_number || "",
+                  khata_number: data.khata_number || "",
+                  // area_dismil: Number(data.area_dismil || 0),
+                  area_dismil: Number(data.remaining_area || 0),
+
+                  // reset payment-related fields if needed
+                  per_dismil_amount: "",
+                  paid_amount: "",
+                  due_amount: 0,
+                  total_amount: 0,
+                  amount_per_month: 0,
+                }));
               }}
+
             >
               <option value="">Select Property</option>
               {properties.map((p) => (
@@ -144,12 +217,43 @@ export default function SellPropertyPage() {
             </select>
           </Field>
 
+          {propertyDetails && (
+            <div className="bg-gray-50 border rounded-lg p-4 text-sm space-y-2">
+              <h4 className="font-semibold text-gray-800 mb-2">
+                Property Details
+              </h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <p className="text-xs text-gray-500">Title</p>
+                  <p className="font-medium text-gray-800">
+                    {propertyDetails.title}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-gray-500">Category</p>
+                  <p className="font-medium text-gray-800">
+                    {propertyDetails.category}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-gray-500">Remaining Area (Dismil)</p>
+                  <p className="font-medium text-gray-800">
+                    {propertyDetails.remaining_area}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+
           {/* BUYER */}
           <Field label="Buyer">
             <select
               required
               className={inputClass}
-              value={formData.customer_id}
               onChange={(e) =>
                 setFormData({ ...formData, customer_id: e.target.value })
               }
@@ -163,86 +267,220 @@ export default function SellPropertyPage() {
             </select>
           </Field>
 
-          {/* PRICING */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Field label="Sale Rate">
-              <input
-                type="number"
-                required
-                placeholder="₹ Sale amount"
-                className={inputClass}
-                value={formData.sale_rate}
-                onChange={(e) =>
-                  setFormData({ ...formData, sale_rate: e.target.value })
-                }
-              />
-            </Field>
+          {/* ================= PAYMENT & PLOT ================= */}
+          <section>
+            <h2 className="font-semibold text-lg mb-4">
+              Payment & Plot Details
+            </h2>
 
-            <Field label="GST % (optional)">
-              <input
-                type="number"
-                placeholder="GST"
-                className={inputClass}
-                value={formData.gst_percentage}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    gst_percentage: e.target.value,
-                  })
-                }
-              />
-            </Field>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-            <Field label="Paid Amount (optional)">
-              <input
-                type="number"
-                placeholder="Advance paid"
-                className={inputClass}
-                value={formData.paid_amount}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    paid_amount: e.target.value,
-                  })
-                }
-              />
-            </Field>
-          </div>
+              <Field label="Plot Number *">
+                <input
+                  className={inputClass}
+                  value={formData.plot_number}
+                  onChange={(e) =>
+                    setFormData({ ...formData, plot_number: e.target.value })
+                  }
+                  readOnly
+                />
+              </Field>
 
-          {/* DOCUMENT */}
-          <Field label="Agreement / Document (optional)">
-            <div className="flex items-center gap-3">
-              <input
-                type="file"
-                accept=".pdf,.jpg,.png"
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    document: e.target.files?.[0] || null,
-                  })
-                }
-                className="text-sm"
-              />
-              {formData.document && (
-                <span className="text-xs text-green-600">
-                  {formData.document.name}
-                </span>
-              )}
+
+              <Field label="Khata Number *">
+                <input
+                  className={inputClass}
+                  value={formData.khata_number}
+                  onChange={(e) =>
+                    setFormData({ ...formData, khata_number: e.target.value })
+                  }
+                  readOnly
+                />
+              </Field>
+
+              <Field label="Dismil *">
+                <input
+                  type="number"
+                  min={0}
+                  max={propertyDetails?.remaining_area || 0}
+                  step="0.01"
+                  className={inputClass}
+                  value={formData.area_dismil}
+                  onChange={(e) => {
+                    const maxDismil = Number(propertyDetails?.remaining_area || 0);
+                    let value = Number(e.target.value);
+
+                    if (value < 0) value = 0;
+                    if (value > maxDismil) value = maxDismil;
+
+                    setFormData({ ...formData, area_dismil: value });
+                  }}
+                />
+              </Field>
+
+
+
+
+              <Field label="Per Dismil Amount *">
+                <input
+                  type="number"
+                  className={inputClass}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      per_dismil_amount: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+
+              <Field label="Total Amount">
+                <input
+                  readOnly
+                  className={`${inputClass} bg-gray-100`}
+                  value={formData.total_amount.toFixed(2)}
+                />
+              </Field>
+
+              <Field label="Pay Amount">
+                <input
+                  type="number"
+                  className={inputClass}
+                  onChange={(e) =>
+                    setFormData({ ...formData, paid_amount: e.target.value })
+                  }
+                />
+              </Field>
+
+              <Field label="Due Amount">
+                <input
+                  readOnly
+                  className={`${inputClass} bg-gray-100`}
+                  value={formData.due_amount.toFixed(2)}
+                />
+              </Field>
+
+              <Field label="Period (Years)">
+                <select
+                  className={inputClass}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      period_years: e.target.value,
+                    })
+                  }
+                >
+                  {[1, 2, 3, 5, 10].map((y) => (
+                    <option key={y} value={y}>
+                      {y} Year
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Amount / Month">
+                <input
+                  readOnly
+                  className={`${inputClass} bg-gray-100`}
+                  value={formData.amount_per_month.toFixed(2)}
+                />
+              </Field>
+
+              <div className="md:col-span-3">
+                <Field label="Payment Mode">
+                  <select
+                    className={inputClass}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        payment_mode: e.target.value,
+                        transaction_no:
+                          e.target.value === "CASH" ? "" : formData.transaction_no,
+                      })
+                    }
+                  >
+
+                    <option value="">Select Payment Mode</option>
+                    <option value="BANK">Bank</option>
+                    <option value="CASH">Cash</option>
+                    <option value="ONLINE">Online</option>
+                  </select>
+                </Field>
+              </div>
+
+              {/* Transaction No (BANK / ONLINE only) */}
+              {(formData.payment_mode === "BANK" ||
+                formData.payment_mode === "ONLINE") && (
+                  <div className="md:col-span-3">
+                    <Field label="Transaction No *">
+                      <input
+                        type="text"
+                        className={inputClass}
+                        placeholder="Enter transaction number"
+                        value={formData.transaction_no}
+                        required
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            transaction_no: e.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                  </div>
+                )}
+
+              <div className="md:col-span-3">
+                <Field label="Payment Receipt">
+                  <div className="space-y-1">
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.pdf"
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          payment_receipt: e.target.files?.[0] || null,
+                        })
+                      }
+                      className="
+          w-full rounded-lg border border-gray-300 bg-white
+          px-3 py-2 text-sm text-gray-700
+          file:mr-4 file:rounded-md file:border-0
+          file:bg-blue-600 file:px-4 file:py-2
+          file:text-xs file:font-medium file:text-white
+          hover:file:bg-blue-700
+          focus:outline-none focus:ring-2 focus:ring-blue-500
+        "
+                    />
+
+                    <p className="text-xs text-gray-500">
+                      Accepted formats: JPG, PNG, PDF · Max size 5MB
+                    </p>
+
+                    {formData.payment_receipt && (
+                      <p className="text-xs text-green-600">
+                        Selected file: {formData.payment_receipt.name}
+                      </p>
+                    )}
+                  </div>
+                </Field>
+              </div>
+
             </div>
-          </Field>
+          </section>
 
           {/* ACTIONS */}
           <div className="flex justify-end gap-3 pt-4 border-t">
             <Link
               href="/properties"
-              className="px-4 py-2 text-sm bg-gray-100 rounded-md hover:bg-gray-200"
+              className="px-4 py-2 bg-gray-100 rounded-md"
             >
               Cancel
             </Link>
 
             <button
               type="submit"
-              className="px-5 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="px-5 py-2 bg-blue-600 text-white rounded-md"
             >
               Proceed to Sell
             </button>
@@ -252,33 +490,20 @@ export default function SellPropertyPage() {
 
       {/* CONFIRM MODAL */}
       {openConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-
-          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
-            <h3 className="text-lg font-semibold">
-              Confirm Property Sale
-            </h3>
-
-            <p className="text-sm text-gray-600">
-              This action will mark the property as sold and
-              create sale records.
-            </p>
-
-            <div className="flex justify-end gap-3 pt-4">
-              <button
-                onClick={() => setOpenConfirm(false)}
-                className="px-4 py-2 text-sm bg-gray-100 rounded-md"
-              >
+        <div className="fixed inset-0 flex items-center justify-center z-999">
+          <div className="absolute inset-0 bg-black/40" />
+          <div className="relative bg-white p-6 rounded-xl space-y-4">
+            <p className="font-semibold">Confirm property sale?</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setOpenConfirm(false)}>
                 Cancel
               </button>
-
               <button
                 onClick={submitSale}
                 disabled={loading}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md"
+                className="bg-blue-600 text-white px-4 py-2 rounded"
               >
-                {loading ? "Saving..." : "Confirm Sale"}
+                {loading ? "Saving..." : "Confirm"}
               </button>
             </div>
           </div>
@@ -288,7 +513,7 @@ export default function SellPropertyPage() {
   );
 }
 
-/* ================= SMALL UI HELPERS ================= */
+/* ================= HELPERS ================= */
 
 const Field = ({
   label,
