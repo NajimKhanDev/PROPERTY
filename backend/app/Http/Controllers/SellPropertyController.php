@@ -57,8 +57,17 @@ class SellPropertyController extends Controller
         try {
             $property = Property::findOrFail($request->property_id);
 
-            if ($property->status !== 'AVAILABLE') {
-                return response()->json(['message' => 'Property is already SOLD or BOOKED.'], 400);
+            // Check remaining area instead of status
+            $soldArea = SellProperty::where('property_id', $request->property_id)
+                                  ->where('is_deleted', 0)
+                                  ->sum('area_dismil');
+            
+            $remainingArea = $property->area_dismil - $soldArea;
+            
+            if ($request->area_dismil > $remainingArea) {
+                return response()->json([
+                    'message' => "Cannot sell {$request->area_dismil} dismil. Only {$remainingArea} dismil remaining."
+                ], 400);
             }
 
             $data = $request->except(['payment_receipt']);
@@ -107,10 +116,14 @@ class SellPropertyController extends Controller
                 Transaction::create($transactionData);
             }
 
-            $status = ($data['pending_amount'] <= 0) ? 'SOLD' : 'BOOKED';
+            // Update property status based on remaining area
+            $newSoldArea = $soldArea + $request->area_dismil;
+            $newRemainingArea = $property->area_dismil - $newSoldArea;
+            
+            $status = ($newRemainingArea <= 0) ? 'SOLD' : 'BOOKED';
             $property->update([
-                'status'   => $status,
-                'buyer_id' => $request->customer_id
+                'status' => $status,
+                'buyer_id' => $request->customer_id // Keep last buyer for reference
             ]);
 
             // Create EMI schedule if period_years is provided
@@ -154,7 +167,7 @@ class SellPropertyController extends Controller
             'property.seller:id,name,phone,email',
             'buyer:id,name,phone,email',
             'documents',
-            'transactions' => fn($q) => $q->where('is_deleted', 0)->latest('payment_date'),
+            'transactions' => fn($q) => $q->where('sell_property_id', $id)->where('is_deleted', 0)->latest('payment_date'),
             'emis' => fn($q) => $q->where('is_deleted', 0)->orderBy('emi_number')
         ])
         ->where('id', $id)

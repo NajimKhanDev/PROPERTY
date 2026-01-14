@@ -91,6 +91,11 @@ class Property extends Model
         return $this->hasOne(SellProperty::class, 'property_id');
     }
     
+    public function sell_deals()
+    {
+        return $this->hasMany(SellProperty::class, 'property_id');
+    }
+    
     public function emis()
     {
         return $this->hasMany(Emi::class, 'property_id');

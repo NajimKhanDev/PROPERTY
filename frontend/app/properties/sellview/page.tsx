@@ -22,6 +22,10 @@ export default function PropertyViewPage() {
   const [selectedEmi, setSelectedEmi] = useState<any>(null);
   const [savingEmi, setSavingEmi] = useState(false);
 
+  const [openUnpayModal, setOpenUnpayModal] = useState(false);
+  const [emiToUnpay, setEmiToUnpay] = useState<any>(null);
+
+
   const [emiPayment, setEmiPayment] = useState({
     paid_amount: "",
     payment_mode: "CASH",
@@ -33,13 +37,14 @@ export default function PropertyViewPage() {
   const [openPayment, setOpenPayment] = useState(false);
   const [savingPayment, setSavingPayment] = useState(false);
 
-  const [paymentData, setPaymentData] = useState({
+  const [paymentData, setPaymentData] = useState<any>({
     amount: "",
     payment_mode: "ONLINE",
     reference_no: "",
     payment_date: "",
     remarks: "",
   });
+
 
   /* ================= FETCH PROPERTY ================= */
   useEffect(() => {
@@ -77,10 +82,8 @@ export default function PropertyViewPage() {
         `${ProjectApi.sell_property}/${propertyId}`
       );
 
-      // console.log(res.data,"----------->")
       const sale = res.data;
-      // console.log(sale.transactions ,"sale.transactions ----------->")
-      // const sale = res.data.data?.[0];
+
 
       setData(sale);
       setDealData({
@@ -127,6 +130,16 @@ export default function PropertyViewPage() {
       return;
     }
 
+    if (
+      (emiPayment.payment_mode === "BANK" ||
+        emiPayment.payment_mode === "ONLINE") &&
+      !emiPayment.transaction_no
+    ) {
+      toast.error("Transaction number is required");
+      return;
+    }
+
+
     try {
       setSavingEmi(true);
 
@@ -162,6 +175,33 @@ export default function PropertyViewPage() {
     }
   };
 
+  const confirmUnpayEmi = async () => {
+    if (!emiToUnpay) return;
+
+    try {
+      setSavingEmi(true);
+
+      await axiosInstance.post(
+        `/sell-emis/${emiToUnpay.id}/unpay`
+      );
+
+      toast.success("EMI marked as unpaid");
+
+      setOpenUnpayModal(false);
+      setEmiToUnpay(null);
+
+      fetchEmis(emiToUnpay.sell_property_id);
+      window.location.reload(); // keeping consistent with your pattern
+    } catch (err: any) {
+      toast.error(
+        err?.response?.data?.message || "Failed to unpay EMI"
+      );
+    } finally {
+      setSavingEmi(false);
+    }
+  };
+
+
 
 
   /* ================= ADD PAYMENT ================= */
@@ -170,7 +210,7 @@ export default function PropertyViewPage() {
       setSavingPayment(true);
 
       const res = await axiosInstance.post("/transactions", {
-        property_id: propertyId,
+        property_id: data.property.id,
         sell_property_id: dealData.deal_summary.sale_id,
         amount: paymentData.amount,
         payment_mode: paymentData.payment_mode,
@@ -191,6 +231,7 @@ export default function PropertyViewPage() {
         remarks: "",
       });
 
+      window.location.reload()
       // fetchSellDeal(); // refresh list
     } catch (err: any) {
       const message =
@@ -204,16 +245,25 @@ export default function PropertyViewPage() {
 
 
 
+  const isTxnRequired =
+    emiPayment.payment_mode === "BANK" ||
+    emiPayment.payment_mode === "ONLINE";
+
   const isEmiFormValid =
     Number(emiPayment.paid_amount) > 0 &&
     Boolean(emiPayment.payment_mode) &&
-    Boolean(emiPayment.transaction_no) &&   // ✅ REQUIRED
-    Boolean(emiPayment.payment_receipt);
+    Boolean(emiPayment.payment_receipt) &&
+    (!isTxnRequired || Boolean(emiPayment.transaction_no));
+
 
 
   const allEmisPaid =
     emis.length > 0 && emis.every((emi) => emi.status === "PAID");
 
+  const canAddPayment =
+    Number(data?.pending_amount) > 0 &&
+    emis.length > 0 &&
+    allEmisPaid;
 
 
   if (loading) {
@@ -233,7 +283,7 @@ export default function PropertyViewPage() {
   }
 
 
-  console.log(dealData?.transactions, "dealData?.transactions")
+  // console.log(data, "data")
   return (
     <div className="p-6 space-y-6 text-black">
       {/* HEADER */}
@@ -251,11 +301,11 @@ export default function PropertyViewPage() {
         <Grid>
           <Info label="Title" value={data.property?.title} />
           <Info label="Category" value={data.property?.category} />
-          <Info label="Status" value={data.property?.status} />
-          <Info label="Transaction Type" value={data.property?.transaction_type} />
+          {/* <Info label="Status" value={data.property?.status} /> */}
+          {/* <Info label="Transaction Type" value={data.property?.transaction_type} /> */}
           <Info
             label="Date"
-            value={new Date(data.property?.date).toLocaleDateString("en-IN")}
+            value={new Date(data?.sale_date).toLocaleDateString("en-IN")}
           />
         </Grid>
       </Section>
@@ -284,6 +334,18 @@ export default function PropertyViewPage() {
           </Grid>
         </Section>
       )}
+
+      {data.buyer && (
+        <Section title="Buyer Details">
+          <Grid>
+            <Info label="Name" value={data.buyer.name} />
+            <Info label="Phone" value={data.buyer.phone} />
+            <Info label="Email" value={data.buyer.email} />
+            {/* <Info label="Buyer ID" value={data.buyer.id} /> */}
+          </Grid>
+        </Section>
+      )}
+
 
       {/* ================= DEAL SUMMARY ================= */}
       <Section title="Deal Summary">
@@ -323,44 +385,92 @@ export default function PropertyViewPage() {
             />
           </div>
 
+          {canAddPayment && (
+            <div className="flex justify-end mb-4">
+              <button
+                onClick={() => {
+                  setPaymentData({
+                    amount: Number(data.pending_amount),
+                    payment_date: new Date().toISOString().slice(0, 10),
+                    payment_mode: "ONLINE",
+                    reference_no: "",
+                    remarks: "",
+                  });
+                  setOpenPayment(true);
+                }}
+                className="px-5 py-2 bg-[#0070BB] text-white rounded-md hover:bg-[#005A99]"
+              >
+                Add Payment
+              </button>
+            </div>
+          )}
+
+
           {/* TABLE */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b  text-gray-500">
-                  <th className="text-left py-2">Date</th>
-                  <th className="text-left py-2">Mode</th>
-                  <th className="text-left py-2">Transaction No</th>
-                  <th className="text-left py-2">Reference</th>
-                  <th className="text-left py-2">Receipt</th>
-                  <th className="text-left py-2">Remarks</th>
-                  <th className="text-right py-2">Amount</th>
+          <div className="overflow-x-auto rounded-xl border border-gray-200">
+            <table className="w-full text-sm text-gray-700">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    Date
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    Mode
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    Transaction No
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    Reference
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    Receipt
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    Remarks
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium text-gray-500">
+                    Amount
+                  </th>
                 </tr>
               </thead>
 
-              <tbody className="divide-y border-b border-gray-200">
+              <tbody className="divide-y divide-gray-100">
                 {dealData.transactions.map((tx: any) => (
-                  <tr key={tx.id} className="hover:bg-gray-50 transition">
-                    <td className="py-2">
+                  <tr
+                    key={tx.id}
+                    className="hover:bg-gray-50 transition-colors"
+                  >
+                    {/* DATE */}
+                    <td className="px-4 py-3 whitespace-nowrap">
                       {new Date(tx.payment_date).toLocaleDateString("en-IN")}
                     </td>
 
-                    <td className="py-2">
-                      <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-600 text-xs">
+                    {/* MODE */}
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">
                         {tx.payment_mode}
                       </span>
                     </td>
 
-                    <td className="py-2">{tx.transaction_no || "—"}</td>
-                    <td className="py-2">{tx.reference_no || "—"}</td>
+                    {/* TRANSACTION NO */}
+                    <td className="px-4 py-3 text-gray-600">
+                      {tx.transaction_no || "—"}
+                    </td>
 
-                    <td className="py-2">
+                    {/* REFERENCE */}
+                    <td className="px-4 py-3 text-gray-600">
+                      {tx.reference_no || "—"}
+                    </td>
+
+                    {/* RECEIPT */}
+                    <td className="px-4 py-3">
                       {tx.payment_receipt ? (
                         <a
                           href={`${process.env.NEXT_PUBLIC_IMAGE_BASE_URL}/${tx.payment_receipt}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-600 text-xs font-medium hover:underline"
+                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 text-xs font-medium"
                         >
                           View
                         </a>
@@ -369,9 +479,13 @@ export default function PropertyViewPage() {
                       )}
                     </td>
 
-                    <td className="py-2">{tx.remarks || "—"}</td>
+                    {/* REMARKS */}
+                    <td className="px-4 py-3 text-gray-600 max-w-xs truncate">
+                      {tx.remarks || "—"}
+                    </td>
 
-                    <td className="py-2 text-right font-medium text-green-600">
+                    {/* AMOUNT */}
+                    <td className="px-4 py-3 text-right font-semibold text-green-600">
                       ₹{Number(tx.amount).toLocaleString("en-IN")}
                     </td>
                   </tr>
@@ -379,6 +493,7 @@ export default function PropertyViewPage() {
               </tbody>
             </table>
           </div>
+
         </div>
       )}
 
@@ -483,11 +598,24 @@ export default function PropertyViewPage() {
                           </button>
                         ) : (
                           <button
-                            disabled
-                            className="px-3 py-1 text-xs rounded-full bg-green-100 text-green-700 cursor-not-allowed"
+                            type="button"
+                            onClick={() => {
+                              setEmiToUnpay(emi);
+                              setOpenUnpayModal(true);
+                            }}
+                            className="
+    px-4 py-1.5
+    text-xs font-medium
+    rounded-md
+    bg-red-600 text-white
+    hover:bg-red-700
+    transition
+  "
                           >
-                            Paid
+                            Unpay
                           </button>
+
+
                         )}
                       </td>
 
@@ -544,12 +672,23 @@ export default function PropertyViewPage() {
         <Modal title="Add Payment" onClose={() => setOpenPayment(false)}>
           <input
             type="number"
-            placeholder="Amount"
+            max={Number(data.pending_amount)}
+            value={paymentData.amount}
+            onChange={(e) => {
+              let value = Number(e.target.value);
+              if (value > Number(data.pending_amount)) {
+                value = Number(data.pending_amount);
+              }
+
+              setPaymentData({
+                ...paymentData,
+                amount: value,
+              });
+            }}
+            disabled
             className={inputClass}
-            onChange={(e) =>
-              setPaymentData({ ...paymentData, amount: e.target.value })
-            }
           />
+
 
           <select
             className={inputClass}
@@ -560,9 +699,9 @@ export default function PropertyViewPage() {
               })
             }
           >
+            <option value="CASH">Cash</option>
             <option value="BANK">Bank</option>
             <option value="ONLINE">Online</option>
-            <option value="CASH">Cash</option>
           </select>
 
           <input
@@ -626,6 +765,7 @@ export default function PropertyViewPage() {
             onChange={(e) =>
               setEmiPayment({ ...emiPayment, paid_amount: e.target.value })
             }
+            readOnly
           />
 
           <select
@@ -634,23 +774,27 @@ export default function PropertyViewPage() {
               setEmiPayment({ ...emiPayment, payment_mode: e.target.value })
             }
           >
+            <option value="CASH">Cash</option>
             <option value="BANK">Bank</option>
             <option value="ONLINE">Online</option>
-            <option value="CASH">Cash</option>
           </select>
 
-          <input
-            type="text"
-            placeholder="Transaction No *"
-            className={inputClass}
-            value={emiPayment.transaction_no}
-            onChange={(e) =>
-              setEmiPayment({
-                ...emiPayment,
-                transaction_no: e.target.value,
-              })
-            }
-          />
+          {(emiPayment.payment_mode === "BANK" ||
+            emiPayment.payment_mode === "ONLINE") && (
+              <input
+                type="text"
+                placeholder="Transaction No *"
+                className={inputClass}
+                value={emiPayment.transaction_no}
+                onChange={(e) =>
+                  setEmiPayment({
+                    ...emiPayment,
+                    transaction_no: e.target.value,
+                  })
+                }
+              />
+            )}
+
 
 
           <div className="space-y-1">
@@ -718,6 +862,54 @@ export default function PropertyViewPage() {
           </div>
         </Modal>
       )}
+
+      {openUnpayModal && emiToUnpay && (
+        <Modal
+          title="Confirm Unpay EMI"
+          onClose={() => {
+            setOpenUnpayModal(false);
+            setEmiToUnpay(null);
+          }}
+        >
+          <p className="text-sm text-gray-600">
+            You are about to <span className="font-semibold text-red-600">unpay</span>{" "}
+            <strong>EMI #{emiToUnpay.emi_number}</strong> of amount{" "}
+            <strong>
+              ₹{Number(emiToUnpay.emi_amount).toLocaleString("en-IN")}
+            </strong>.
+          </p>
+
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 text-xs text-yellow-700">
+            ⚠️ This action will:
+            <ul className="list-disc ml-5 mt-1 space-y-1">
+              <li>Mark EMI as unpaid</li>
+              <li>Remove receipt & transaction number</li>
+              <li>Update received & pending amounts</li>
+            </ul>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4">
+            <button
+              onClick={() => {
+                setOpenUnpayModal(false);
+                setEmiToUnpay(null);
+              }}
+              className="px-4 py-2 bg-gray-200 rounded-md"
+            >
+              Cancel
+            </button>
+
+            <button
+              onClick={confirmUnpayEmi}
+              disabled={savingEmi}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+            >
+              {savingEmi ? "Processing..." : "Yes, Unpay EMI"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
 
     </div>
   );

@@ -168,7 +168,7 @@ class PropertyController extends Controller
     {
         $property = Property::with([
             'documents', 
-            'seller:id,name,phone,email'
+            'seller:id,name,phone,email,address,pan_number,aadhar_number'
         ])
         ->where('id', $id)
         ->where('is_deleted', 0)
@@ -362,8 +362,12 @@ class PropertyController extends Controller
             'transactions' => function($q) { 
                 $q->where('is_deleted', 0)->latest('payment_date');
             },
-            'sell_deal' => function($q) { 
-                $q->with(['buyer:id,name,phone,email', 'documents'])
+            'sell_deals' => function($q) { 
+                $q->with(['buyer:id,name,phone,email', 'documents', 'transactions' => function($tq) {
+                    $tq->where('is_deleted', 0)->latest('payment_date');
+                }, 'emis' => function($eq) {
+                    $eq->where('is_deleted', 0)->orderBy('emi_number');
+                }])
                   ->where('is_deleted', 0);
             }
         ])
@@ -386,9 +390,11 @@ class PropertyController extends Controller
 
         // 3. Calculations
         $purchaseCost = $property->total_amount;
-        $saleRevenue  = $property->sell_deal->total_sale_amount ?? 0;
-        $isSold       = ($property->status !== 'AVAILABLE');
-        $profit       = $isSold ? ($saleRevenue - $purchaseCost) : 0;
+        $totalSaleRevenue = $property->sell_deals->sum('total_sale_amount');
+        $totalReceived = $property->sell_deals->sum('received_amount');
+        $totalPending = $property->sell_deals->sum('pending_amount');
+        $isSold = ($property->status === 'SOLD');
+        $profit = $isSold ? ($totalSaleRevenue - $purchaseCost) : 0;
 
         // 4. Response Structure
         $data = [
@@ -399,27 +405,63 @@ class PropertyController extends Controller
                 'category' => $property->category,
                 'status'   => $property->status,
                 'added_on' => $property->date,
+                'total_area' => $property->area_dismil,
+                'sold_area' => $property->sell_deals->sum('area_dismil'),
+                'remaining_area' => $property->area_dismil - $property->sell_deals->sum('area_dismil')
             ],
             'financials' => [
                 'purchase_cost' => $purchaseCost,
-                'sale_revenue'  => $isSold ? $saleRevenue : 'Not Sold',
-                'net_profit'    => $isSold ? $profit : 'N/A',
-                'vendor_due'    => $property->due_amount,
-                'customer_due'  => $property->sell_deal->pending_amount ?? 0
+                'total_sale_revenue' => $totalSaleRevenue,
+                'total_received' => $totalReceived,
+                'total_pending' => $totalPending,
+                'net_profit' => $profit,
+                'vendor_due' => $property->due_amount
             ],
             'parties' => [
                 'vendor' => $property->seller ?? null,
-                'buyer'  => $property->sell_deal->buyer ?? null
+                'buyers' => $property->sell_deals->map(function($deal) {
+                    return [
+                        'sale_id' => $deal->id,
+                        'buyer' => $deal->buyer,
+                        'area_dismil' => $deal->area_dismil,
+                        'sale_amount' => $deal->total_sale_amount,
+                        'received_amount' => $deal->received_amount,
+                        'pending_amount' => $deal->pending_amount,
+                        'payment_status' => $deal->pending_amount <= 0 ? 'FULLY_PAID' : 'PENDING'
+                    ];
+                })
             ],
             'documents' => [
                 'inventory_docs' => $property->documents,
-                'sale_docs'      => $property->sell_deal->documents ?? []
+                'sale_docs' => $property->sell_deals->flatMap(function($deal) {
+                    return $deal->documents->map(function($doc) use ($deal) {
+                        $doc->sale_id = $deal->id;
+                        $doc->buyer_name = $deal->buyer->name ?? 'N/A';
+                        return $doc;
+                    });
+                })
             ],
             // SPLIT LEDGER
             'ledger' => [
-                'purchase_history' => $purchaseTxns, // Paisa Gaya (Out)
-                'sale_history'     => $saleTxns      // Paisa Aaya (In)
-            ]
+                'purchase_history' => $purchaseTxns,
+                'sales_history' => $property->sell_deals->map(function($deal) {
+                    return [
+                        'sale_id' => $deal->id,
+                        'buyer_name' => $deal->buyer->name ?? 'N/A',
+                        'transactions' => $deal->transactions->where('sell_property_id', $deal->id)->values()
+                    ];
+                })
+            ],
+            'emi_details' => $property->sell_deals->map(function($deal) {
+                return [
+                    'sale_id' => $deal->id,
+                    'buyer_name' => $deal->buyer->name ?? 'N/A',
+                    'total_emis' => $deal->emis->count(),
+                    'paid_emis' => $deal->emis->where('status', 'PAID')->count(),
+                    'pending_emis' => $deal->emis->where('status', 'PENDING')->count(),
+                    'emis' => $deal->emis
+                ];
+            })
         ];
 
         return response()->json($data);

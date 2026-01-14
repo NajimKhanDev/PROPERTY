@@ -313,8 +313,9 @@ class TransactionController extends Controller
     {
         // 1. Base Query with Relationships
         $query = Transaction::with([
-            'property:id,title,seller_id', 
+            'property:id,title,seller_id,area_dismil', 
             'property.seller:id,name,phone', // Vendor (For DEBIT)
+            'sale_deal:id,property_id,customer_id,area_dismil,total_sale_amount,invoice_no',
             'sale_deal.buyer:id,name,phone'  // Customer (For CREDIT)
         ])
         ->where('is_deleted', 0);

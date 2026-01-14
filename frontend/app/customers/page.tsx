@@ -23,16 +23,27 @@ export default function CustomersPage() {
   const [deleting, setDeleting] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
+
+
   /* ================= FETCH CUSTOMERS ================= */
   useEffect(() => {
     fetchCustomers();
-  }, []);
+  }, [page, perPage]);
 
   const fetchCustomers = async () => {
     try {
       setLoading(true);
 
-      const res = await axiosInstance.get(ProjectApi.all_customers);
+      const res = await axiosInstance.get(ProjectApi.all_customers, {
+        params: {
+          page,
+          per_page: perPage,
+        },
+      });
+
       const json = res.data;
 
       if (!json?.status) {
@@ -40,6 +51,9 @@ export default function CustomersPage() {
       }
 
       setCustomers(json.data.data || []);
+
+      // 👇 IMPORTANT (adjust key if backend differs)
+      setTotalPages(json.data.last_page || 1);
     } catch (error) {
       console.error("Error loading customers:", error);
       setCustomers([]);
@@ -47,6 +61,7 @@ export default function CustomersPage() {
       setLoading(false);
     }
   };
+
 
   /* ================= DELETE CUSTOMER ================= */
   const confirmDelete = async () => {
@@ -102,7 +117,7 @@ export default function CustomersPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-gray-700 text-left">
-                {["S No","Name", "Email", "Phone", "Type", "Actions"].map((h) => (
+                {["S No", "Name", "Email", "Phone", "Type", "Actions"].map((h) => (
                   <th
                     key={h}
                     className="px-4 py-3 font-semibold border-b border-gray-100"
@@ -143,12 +158,11 @@ export default function CustomersPage() {
                 customers.map((c, idx) => (
                   <tr
                     key={c.id}
-                    className={`transition ${
-                      idx % 2 === 0 ? "bg-white" : "bg-gray-50"
-                    } hover:bg-blue-50`}
+                    className={`transition ${idx % 2 === 0 ? "bg-white" : "bg-gray-50"
+                      } hover:bg-blue-50`}
                   >
                     <td className="px-4 py-3 border-b border-gray-100 font-medium text-gray-900">
-                      {idx +1}
+                      {idx + 1}
                     </td>
                     <td className="px-4 py-3 border-b border-gray-100 font-medium text-gray-900">
                       {c.name}
@@ -164,13 +178,12 @@ export default function CustomersPage() {
 
                     <td className="px-4 py-3 border-b border-gray-100">
                       <span
-                        className={`px-2 py-0.5 text-xs rounded-full font-medium ${
-                          c.type === "BUYER"
-                            ? "bg-green-100 text-green-700"
-                            : c.type === "SELLER"
+                        className={`px-2 py-0.5 text-xs rounded-full font-medium ${c.type === "BUYER"
+                          ? "bg-green-100 text-green-700"
+                          : c.type === "SELLER"
                             ? "bg-blue-100 text-blue-700"
                             : "bg-purple-100 text-purple-700"
-                        }`}
+                          }`}
                       >
                         {c.type}
                       </span>
@@ -205,6 +218,56 @@ export default function CustomersPage() {
                 ))}
             </tbody>
           </table>
+
+          {/* ================= PAGINATION ================= */}
+          {!loading && totalPages > 1 && (
+            <div className="flex justify-between items-center mt-6">
+              {/* Page Info */}
+              <p className="text-sm text-gray-600">
+                Page <span className="font-medium">{page}</span> of{" "}
+                <span className="font-medium">{totalPages}</span>
+              </p>
+
+              {/* Controls */}
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => p - 1)}
+                  className="px-3 py-1.5 text-sm rounded-md border border-gray-200 
+                   text-gray-700 disabled:opacity-40 hover:bg-gray-100"
+                >
+                  Prev
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .slice(Math.max(0, page - 3), page + 2)
+                  .map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p)}
+                      className={`px-3 py-1.5 text-sm rounded-md border border-gray-200
+              ${p === page
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "text-gray-700 hover:bg-gray-100"
+                        }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+
+                <button
+                  disabled={page === totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="px-3 py-1.5 text-sm rounded-md border border-gray-200 
+                   text-gray-700 disabled:opacity-40 hover:bg-gray-100"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+
+
         </div>
       </div>
 

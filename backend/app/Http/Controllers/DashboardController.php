@@ -29,18 +29,26 @@ class DashboardController extends Controller
 
         // 2. INVENTORY STATUS
         // Count stock items
-        $totalStock     = Property::where('transaction_type', 'PURCHASE')->where('is_deleted', 0)->count();
+        $totalStock = Property::where('transaction_type', 'PURCHASE')->where('is_deleted', 0)->count();
         $totalSoldUnits = SellProperty::where('is_deleted', 0)->count();
-        $availableStock = $totalStock - $totalSoldUnits;
+        $fullySoldProperties = Property::where('status', 'SOLD')->where('is_deleted', 0)->count();
+        $partiallySoldProperties = Property::where('status', 'BOOKED')->where('is_deleted', 0)->count();
+        
+        // Calculate available stock: properties with remaining unsold area
+        $availableStock = Property::where('transaction_type', 'PURCHASE')
+            ->where('is_deleted', 0)
+            ->whereRaw('area_dismil > COALESCE((SELECT SUM(area_dismil) FROM sell_properties WHERE property_id = properties.id AND is_deleted = 0), 0)')
+            ->count();
 
         // 3. PROFIT ANALYSIS
-        // Calculate total revenue
+        // Calculate total revenue from all sales
         $revenueGenerated = SellProperty::where('is_deleted', 0)->sum('total_sale_amount');
 
-        // Calculate cost of goods
+        // Calculate proportional cost of sold goods
         $costOfSoldGoods = SellProperty::join('properties', 'sell_properties.property_id', '=', 'properties.id')
                                        ->where('sell_properties.is_deleted', 0)
-                                       ->sum('properties.total_amount');
+                                       ->selectRaw('SUM((sell_properties.area_dismil / properties.area_dismil) * properties.total_amount) as proportional_cost')
+                                       ->value('proportional_cost') ?? 0;
 
         $grossProfit = $revenueGenerated - $costOfSoldGoods;
         
@@ -103,9 +111,11 @@ class DashboardController extends Controller
                     'status'        => ($netCashHand >= 0) ? 'POSITIVE' : 'NEGATIVE'
                 ],
                 'inventory' => [
-                    'total_units'   => $totalStock,
-                    'sold_units'    => $totalSoldUnits,
-                    'unsold_units'  => $availableStock
+                    'total_properties'      => $totalStock,
+                    'fully_sold'           => $fullySoldProperties,
+                    'partially_sold'       => $partiallySoldProperties,
+                    'available'            => $availableStock,
+                    'total_sale_deals'     => $totalSoldUnits
                 ],
                 'profitability' => [
                     'total_sales_value' => $revenueGenerated,

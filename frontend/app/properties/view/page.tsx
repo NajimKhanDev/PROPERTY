@@ -22,6 +22,10 @@ export default function PropertyViewPage() {
   const [selectedEmi, setSelectedEmi] = useState<any>(null);
   const [emiLoading, setEmiLoading] = useState(false);
 
+  const [openUnpayModal, setOpenUnpayModal] = useState(false);
+  const [emiToUnpay, setEmiToUnpay] = useState<any>(null);
+
+
   const [emiPayment, setEmiPayment] = useState({
     paid_amount: "",
     payment_mode: "BANK",
@@ -192,6 +196,31 @@ export default function PropertyViewPage() {
   };
 
 
+  const confirmUnpayEmi = async () => {
+    if (!emiToUnpay) return;
+
+    try {
+      setEmiLoading(true);
+
+      await axiosInstance.post(`/emis/${emiToUnpay.id}/unpay`);
+
+      toast.success("EMI marked as unpaid");
+
+      setOpenUnpayModal(false);
+      setEmiToUnpay(null);
+
+      fetchEmis();
+      fetchTransactions();
+      fetchProperty();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to unpay EMI");
+    } finally {
+      setEmiLoading(false);
+    }
+  };
+
+
+
   const formatAmount = (val: any) =>
     val !== null && val !== undefined
       ? `₹${Number(val).toLocaleString("en-IN")}`
@@ -201,6 +230,16 @@ export default function PropertyViewPage() {
 
   const allEmisPaid =
     emis.length > 0 && emis.every((emi) => emi.status === "PAID");
+
+
+  const isTxnRequired =
+    emiPayment.payment_mode === "BANK" ||
+    emiPayment.payment_mode === "ONLINE";
+
+  const isConfirmDisabled =
+    emiLoading ||
+    !emiPayment.payment_receipt ||
+    (isTxnRequired && !emiPayment.transaction_no);
 
 
   if (loading) {
@@ -401,7 +440,7 @@ export default function PropertyViewPage() {
           <button
             onClick={() => {
               setPayment({
-                amount: "",
+                amount: property.due_amount,
                 payment_date: new Date().toISOString().slice(0, 10),
                 payment_mode: "ONLINE",
                 reference_no: "",
@@ -422,63 +461,93 @@ export default function PropertyViewPage() {
         {transactions.length === 0 ? (
           <p className="text-sm text-gray-500">No transactions found</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 text-gray-500">
-                <th className="text-left py-2">Date</th>
-                <th className="text-left py-2">Mode</th>
-                <th className="text-left py-2">Transaction No</th>
-                <th className="text-left py-2">Reference</th>
-                <th className="text-left py-2">Receipt</th>
-                <th className="text-left py-2">Remarks</th>
-                <th className="text-right py-2">Amount</th>
-              </tr>
-
-            </thead>
-            <tbody>
-              {transactions.map((tx) => (
-                <tr key={tx.id} className="border-b border-gray-200 last:border-0">
-                  <td className="py-2">
-                    {new Date(tx.payment_date).toLocaleDateString("en-IN")}
-                  </td>
-
-                  <td className="py-2">{tx.payment_mode}</td>
-
-                  <td className="py-2">
-                    {tx.transaction_no || "—"}
-                  </td>
-
-                  <td className="py-2">
-                    {tx.reference_no || "—"}
-                  </td>
-
-                  <td className="py-2">
-                    {tx.payment_receipt ? (
-                      <a
-                        href={`${process.env.NEXT_PUBLIC_IMAGE_BASE_URL}/${tx.payment_receipt}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 text-xs font-medium hover:underline"
-                      >
-                        View
-                      </a>
-                    ) : (
-                      <span className="text-gray-400">—</span>
-                    )}
-                  </td>
-
-                  <td className="py-2">
-                    {tx.remarks || "—"}
-                  </td>
-
-                  <td className="py-2 text-right font-medium text-red-600">
-                    ₹{Number(tx.amount).toLocaleString("en-IN")}
-                  </td>
+          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+            <table className="w-full text-sm text-gray-700">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    Date
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    Mode
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    Transaction No
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    Reference
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    Receipt
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500">
+                    Remarks
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium text-gray-500">
+                    Amount
+                  </th>
                 </tr>
+              </thead>
 
-              ))}
-            </tbody>
-          </table>
+              <tbody className="divide-y divide-gray-100">
+                {transactions.map((tx) => (
+                  <tr
+                    key={tx.id}
+                    className="hover:bg-gray-50 transition-colors"
+                  >
+                    {/* Date */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {new Date(tx.payment_date).toLocaleDateString("en-IN")}
+                    </td>
+
+                    {/* Mode */}
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">
+                        {tx.payment_mode}
+                      </span>
+                    </td>
+
+                    {/* Transaction No */}
+                    <td className="px-4 py-3 text-gray-600">
+                      {tx.transaction_no || "—"}
+                    </td>
+
+                    {/* Reference */}
+                    <td className="px-4 py-3 text-gray-600">
+                      {tx.reference_no || "—"}
+                    </td>
+
+                    {/* Receipt */}
+                    <td className="px-4 py-3">
+                      {tx.payment_receipt ? (
+                        <a
+                          href={`${process.env.NEXT_PUBLIC_IMAGE_BASE_URL}/${tx.payment_receipt}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 text-xs font-medium hover:underline"
+                        >
+                          View
+                        </a>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+
+                    {/* Remarks */}
+                    <td className="px-4 py-3 text-gray-600 max-w-xs truncate">
+                      {tx.remarks || "—"}
+                    </td>
+
+                    {/* Amount */}
+                    <td className="px-4 py-3 text-right font-semibold text-red-600">
+                      ₹{Number(tx.amount).toLocaleString("en-IN")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
         )}
       </div>
 
@@ -598,8 +667,18 @@ export default function PropertyViewPage() {
                               Pay EMI
                             </button>
                           ) : (
-                            <span className="text-xs text-gray-400">—</span>
+                            <button
+                              onClick={() => {
+                                setEmiToUnpay(emi);
+                                setOpenUnpayModal(true);
+                              }}
+                              className="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-md hover:bg-red-700"
+                            >
+                              Unpay
+                            </button>
+
                           )}
+
                         </td>
                       </tr>
                     );
@@ -671,6 +750,7 @@ export default function PropertyViewPage() {
               onChange={(e) =>
                 setPayment({ ...payment, amount: e.target.value })
               }
+              disabled
               className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0070BB]"
             />
 
@@ -796,7 +876,6 @@ export default function PropertyViewPage() {
                     type="text"
                     placeholder="Enter transaction number"
                     value={emiPayment.transaction_no}
-                    required
                     onChange={(e) =>
                       setEmiPayment({
                         ...emiPayment,
@@ -807,6 +886,7 @@ export default function PropertyViewPage() {
                   />
                 </div>
               )}
+
 
 
             {/* Receipt */}
@@ -852,19 +932,72 @@ export default function PropertyViewPage() {
               </button>
               <button
                 onClick={submitEmiPayment}
-                disabled={emiLoading || !emiPayment.payment_receipt || !emiPayment.transaction_no}
-                className={`px-4 py-2 rounded-md text-white ${emiLoading || !emiPayment.payment_receipt || !emiPayment.transaction_no
+                disabled={isConfirmDisabled}
+                className={`px-4 py-2 rounded-md text-white ${isConfirmDisabled
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-[#0070BB] hover:bg-[#005A99]"
                   }`}
               >
-
                 {emiLoading ? "Processing..." : "Confirm Payment"}
+              </button>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {openUnpayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Overlay */}
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+
+          {/* Modal */}
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">
+              Confirm Unpay EMI
+            </h3>
+
+            <p className="text-sm text-gray-600 mb-4">
+              You are about to <span className="font-semibold text-red-600">unpay</span>{" "}
+              <strong>EMI #{emiToUnpay?.emi_number}</strong> of amount{" "}
+              <strong>
+                ₹{Number(emiToUnpay?.emi_amount).toLocaleString("en-IN")}
+              </strong>.
+            </p>
+
+            <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-xs text-yellow-700 mb-4">
+              ⚠️ This will:
+              <ul className="list-disc ml-5 mt-1 space-y-1">
+                <li>Mark the EMI as unpaid</li>
+                <li>Remove transaction number & receipt</li>
+                <li>Update paid & due amounts</li>
+              </ul>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setOpenUnpayModal(false);
+                  setEmiToUnpay(null);
+                }}
+                className="px-4 py-2 rounded-md bg-gray-100 hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={confirmUnpayEmi}
+                disabled={emiLoading}
+                className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {emiLoading ? "Processing..." : "Yes, Unpay EMI"}
               </button>
             </div>
           </div>
         </div>
       )}
+
 
 
     </div>

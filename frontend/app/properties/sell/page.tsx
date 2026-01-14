@@ -26,6 +26,7 @@ interface PropertyDetails {
   category: string;
   address: string;
   area_dismil: any;
+  remaining_area: number;
   total_amount: string;
 }
 
@@ -194,7 +195,8 @@ export default function SellPropertyPage() {
                   // ✅ AUTO-FILL
                   plot_number: data.plot_number || "",
                   khata_number: data.khata_number || "",
-                  area_dismil: Number(data.area_dismil || 0),
+                  // area_dismil: Number(data.area_dismil || 0),
+                  area_dismil: Number(data.remaining_area || 0),
 
                   // reset payment-related fields if needed
                   per_dismil_amount: "",
@@ -237,9 +239,9 @@ export default function SellPropertyPage() {
                 </div>
 
                 <div>
-                  <p className="text-xs text-gray-500">Area (Dismil)</p>
+                  <p className="text-xs text-gray-500">Remaining Area (Dismil)</p>
                   <p className="font-medium text-gray-800">
-                    {propertyDetails.area_dismil}
+                    {propertyDetails.remaining_area}
                   </p>
                 </div>
               </div>
@@ -296,18 +298,16 @@ export default function SellPropertyPage() {
                 />
               </Field>
 
-
               <Field label="Dismil *">
                 <input
                   type="number"
                   min={0}
-                  max={propertyDetails?.area_dismil || 0}
+                  max={propertyDetails?.remaining_area || 0}
                   step="0.01"
-                  placeholder="Enter area in dismil"
                   className={inputClass}
                   value={formData.area_dismil}
                   onChange={(e) => {
-                    const maxDismil = Number(propertyDetails?.area_dismil || 0);
+                    const maxDismil = Number(propertyDetails?.remaining_area || 0);
                     let value = Number(e.target.value);
 
                     if (value < 0) value = 0;
@@ -317,6 +317,7 @@ export default function SellPropertyPage() {
                   }}
                 />
               </Field>
+
 
 
 
@@ -489,7 +490,7 @@ export default function SellPropertyPage() {
 
       {/* CONFIRM MODAL */}
       {openConfirm && (
-        <div className="fixed inset-0 flex items-center justify-center">
+        <div className="fixed inset-0 flex items-center justify-center z-999">
           <div className="absolute inset-0 bg-black/40" />
           <div className="relative bg-white p-6 rounded-xl space-y-4">
             <p className="font-semibold">Confirm property sale?</p>

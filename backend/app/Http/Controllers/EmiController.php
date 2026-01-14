@@ -102,6 +102,50 @@ class EmiController extends Controller
         }
     }
 
+    public function unpayEmi($id)
+    {
+        $emi = Emi::where('id', $id)->where('is_deleted', 0)->firstOrFail();
+
+        if ($emi->status !== 'PAID' || $emi->paid_amount == 0) {
+            return response()->json(['status' => false, 'message' => 'EMI is not paid or already unpaid'], 400);
+        }
+
+        DB::beginTransaction();
+        try {
+            // Delete associated transaction
+            Transaction::where('property_id', $emi->property_id)
+                ->where('type', 'DEBIT')
+                ->where('remarks', 'LIKE', 'EMI #' . $emi->emi_number . '%')
+                ->delete();
+
+            // Revert Property Amounts
+            $property = $emi->property;
+            $property->decrement('paid_amount', $emi->paid_amount);
+            $property->increment('due_amount', $emi->paid_amount);
+
+            // Reset EMI Record
+            $emi->update([
+                'paid_amount' => 0,
+                'paid_date' => null,
+                'payment_mode' => null,
+                'transaction_no' => null,
+                'payment_receipt' => null,
+                'status' => 'PENDING'
+            ]);
+
+            DB::commit();
+            return response()->json([
+                'status' => true,
+                'message' => 'EMI payment reversed successfully',
+                'data' => $emi->fresh()
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
     public function sellEmisIndex(Request $request)
     {
         $query = SellEmi::with('sellProperty.property:id,title')->where('is_deleted', 0);
@@ -185,6 +229,50 @@ class EmiController extends Controller
                     'emi' => $emi->fresh(),
                     'transaction' => $transaction
                 ]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function unpaySellEmi($id)
+    {
+        $emi = SellEmi::where('id', $id)->where('is_deleted', 0)->firstOrFail();
+
+        if ($emi->status !== 'PAID' || $emi->paid_amount == 0) {
+            return response()->json(['status' => false, 'message' => 'Sell EMI is not paid or already unpaid'], 400);
+        }
+
+        DB::beginTransaction();
+        try {
+            // Delete associated transaction
+            Transaction::where('sell_property_id', $emi->sell_property_id)
+                ->where('type', 'CREDIT')
+                ->where('remarks', 'LIKE', 'Sell EMI #' . $emi->emi_number . '%')
+                ->delete();
+
+            // Revert SellProperty Amounts
+            $sellProperty = $emi->sellProperty;
+            $sellProperty->decrement('received_amount', $emi->paid_amount);
+            $sellProperty->increment('pending_amount', $emi->paid_amount);
+
+            // Reset EMI Record
+            $emi->update([
+                'paid_amount' => 0,
+                'paid_date' => null,
+                'payment_mode' => null,
+                'transaction_no' => null,
+                'payment_receipt' => null,
+                'status' => 'PENDING'
+            ]);
+
+            DB::commit();
+            return response()->json([
+                'status' => true,
+                'message' => 'Sell EMI payment reversed successfully',
+                'data' => $emi->fresh()
             ]);
 
         } catch (\Exception $e) {

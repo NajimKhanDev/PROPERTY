@@ -67,7 +67,7 @@ export default function PropertiesPage() {
                 "Status",
                 "Actions",
               ].map((h) => (
-                <th key={h} className="px-4 py-3 text-left border-b">
+                <th key={h} className="px-4 py-3 text-left border-b border-gray-300">
                   {h}
                 </th>
               ))}

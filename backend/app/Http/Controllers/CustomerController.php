@@ -13,11 +13,11 @@ use Illuminate\Validation\Rule;
 class CustomerController extends Controller
 {
     // Fetch active customers
-    public function index()
+    public function index(Request $request)
     {
         try {
             // Get non-deleted records
-            $customers = Customer::where('is_deleted', 0)->latest()->paginate(10);
+            $customers = Customer::where('is_deleted', 0)->latest()->paginate($request->input('per_page', 10));
             return response()->json(['status' => true, 'data' => $customers]);
         } catch (\Exception $e) {
             return response()->json(['status' => false, 'message' => $e->getMessage()], 500);

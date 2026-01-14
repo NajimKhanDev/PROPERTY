@@ -123,8 +123,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // EMI Routes
     Route::get('/emis', [EmiController::class, 'index']);
     Route::post('/emis/{id}/pay', [EmiController::class, 'payEmi']);
+    Route::post('/emis/{id}/unpay', [EmiController::class, 'unpayEmi']);
     
     // Sell EMI Routes
     Route::get('/sell-emis', [EmiController::class, 'sellEmisIndex']);
     Route::post('/sell-emis/{id}/pay', [EmiController::class, 'paySellEmi']);
+    Route::post('/sell-emis/{id}/unpay', [EmiController::class, 'unpaySellEmi']);
 });
