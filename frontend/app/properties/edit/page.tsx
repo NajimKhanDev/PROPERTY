@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
-export default function EditPropertyPage() {
+function EditPropertyForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const propertyId = searchParams.get("id");
@@ -139,5 +139,13 @@ export default function EditPropertyPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function EditPropertyPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading...</div>}>
+      <EditPropertyForm />
+    </Suspense>
   );
 }

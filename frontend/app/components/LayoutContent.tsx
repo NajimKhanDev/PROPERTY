@@ -6,16 +6,19 @@ import Header from './Header';
 
 export default function LayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isLoginPage = pathname === '/login';
+  console.log(pathname)
+  const isLoginPage = pathname === '/login/';
 
   if (isLoginPage) {
     return <>{children}</>;
   }
 
   return (
+    <>
     <SidebarLayout>
       <Header/>
       {children}
     </SidebarLayout>
+    </>
   );
 }

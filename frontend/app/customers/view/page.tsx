@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import axiosInstance from "@/app/api/axiosInstance";
@@ -52,7 +52,7 @@ interface CustomerResponse {
 
 /* ================= PAGE ================= */
 
-export default function CustomerViewPage() {
+function CustomerViewContent() {
   const searchParams = useSearchParams();
   const customerId = searchParams.get("id");
 
@@ -268,5 +268,13 @@ export default function CustomerViewPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CustomerViewPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-center text-gray-500">Loading customer details...</div>}>
+      <CustomerViewContent />
+    </Suspense>
   );
 }

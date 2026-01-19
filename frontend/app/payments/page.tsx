@@ -49,7 +49,7 @@ export default function PaymentsPage() {
       if (endDate) params.end_date = endDate;
 
       const res = await axiosInstance.get(
-        "http://127.0.0.1:8000/api/transactions/all",
+        "transactions/all",
         { params }
       );
 
@@ -86,133 +86,133 @@ export default function PaymentsPage() {
       </div>
 
       {/* FILTERS */}
-<div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
-  {/* Header */}
-  <div className="flex items-center justify-between mb-5">
-    <div>
-      <h2 className="text-sm font-semibold text-gray-900">
-        Filter Payments
-      </h2>
-      <p className="text-xs text-gray-500 mt-0.5">
-        Refine results using transaction details
-      </p>
-    </div>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">
+              Filter Payments
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Refine results using transaction details
+            </p>
+          </div>
 
-    <button
-      onClick={() => {
-        setType("ALL");
-        setPaymentMode("");
-        setSearch("");
-        setMinAmount("");
-        setStartDate("");
-        setEndDate("");
-        setPage(1);
-      }}
-      className="text-xs font-medium text-gray-600 hover:text-gray-900 transition"
-    >
-      Reset all
-    </button>
-  </div>
+          <button
+            onClick={() => {
+              setType("ALL");
+              setPaymentMode("");
+              setSearch("");
+              setMinAmount("");
+              setStartDate("");
+              setEndDate("");
+              setPage(1);
+            }}
+            className="text-xs font-medium text-gray-600 hover:text-gray-900 transition"
+          >
+            Reset all
+          </button>
+        </div>
 
-  <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-    {/* Transaction Type */}
-    <div>
-      <label className="block text-xs font-medium text-gray-500 mb-1">
-        Transaction
-      </label>
-      <select
-        value={type}
-        onChange={(e) => setType(e.target.value as PaymentType)}
-        className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+          {/* Transaction Type */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Transaction
+            </label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as PaymentType)}
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm
                    focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition"
-      >
-        <option value="ALL">All</option>
-        <option value="CREDIT">Credit</option>
-        <option value="DEBIT">Debit</option>
-      </select>
-    </div>
+            >
+              <option value="ALL">All</option>
+              <option value="CREDIT">Credit</option>
+              <option value="DEBIT">Debit</option>
+            </select>
+          </div>
 
-    {/* Payment Mode */}
-    <div>
-      <label className="block text-xs font-medium text-gray-500 mb-1">
-        Payment Mode
-      </label>
-      <select
-        value={paymentMode}
-        onChange={(e) => setPaymentMode(e.target.value)}
-        className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm
+          {/* Payment Mode */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Payment Mode
+            </label>
+            <select
+              value={paymentMode}
+              onChange={(e) => setPaymentMode(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm
                    focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition"
-      >
-        <option value="">All</option>
-        <option value="CASH">Cash</option>
-        <option value="ONLINE">Online</option>
-        <option value="UPI">UPI</option>
-      </select>
-    </div>
+            >
+              <option value="">All</option>
+              <option value="CASH">Cash</option>
+              <option value="ONLINE">Online</option>
+              <option value="UPI">UPI</option>
+            </select>
+          </div>
 
-    {/* Min Amount */}
-    <div>
-      <label className="block text-xs font-medium text-gray-500 mb-1">
-        Min Amount
-      </label>
-      <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
-          ₹
-        </span>
-        <input
-          type="number"
-          value={minAmount}
-          onChange={(e) => setMinAmount(e.target.value)}
-          placeholder="0"
-          className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-7 pr-3 py-2 text-sm
+          {/* Min Amount */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Min Amount
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+                ₹
+              </span>
+              <input
+                type="number"
+                value={minAmount}
+                onChange={(e) => setMinAmount(e.target.value)}
+                placeholder="0"
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-7 pr-3 py-2 text-sm
                      focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition"
-        />
+              />
+            </div>
+          </div>
+
+          {/* Start Date */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              From
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm
+                   focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition"
+            />
+          </div>
+
+          {/* End Date */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              To
+            </label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm
+                   focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition"
+            />
+          </div>
+
+          {/* Search */}
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Search
+            </label>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Property, buyer, seller…"
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm
+                   focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition"
+            />
+          </div>
+        </div>
       </div>
-    </div>
-
-    {/* Start Date */}
-    <div>
-      <label className="block text-xs font-medium text-gray-500 mb-1">
-        From
-      </label>
-      <input
-        type="date"
-        value={startDate}
-        onChange={(e) => setStartDate(e.target.value)}
-        className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm
-                   focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition"
-      />
-    </div>
-
-    {/* End Date */}
-    <div>
-      <label className="block text-xs font-medium text-gray-500 mb-1">
-        To
-      </label>
-      <input
-        type="date"
-        value={endDate}
-        onChange={(e) => setEndDate(e.target.value)}
-        className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm
-                   focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition"
-      />
-    </div>
-
-    {/* Search */}
-    <div className="md:col-span-2">
-      <label className="block text-xs font-medium text-gray-500 mb-1">
-        Search
-      </label>
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Property, buyer, seller…"
-        className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm
-                   focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition"
-      />
-    </div>
-  </div>
-</div>
 
 
 
@@ -238,7 +238,7 @@ export default function PaymentsPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {["S no","Date", "Property", "Buyer", "Seller", "Amount", "Type"].map(
+              {["S no", "Date", "Property", "Buyer", "Seller", "Amount", "Type"].map(
                 (h) => (
                   <th
                     key={h}
@@ -261,7 +261,7 @@ export default function PaymentsPage() {
             )}
 
             {!loading &&
-              payments.map((p,i) => (
+              payments.map((p, i) => (
                 <tr key={p.id} className="hover:bg-gray-50 transition">
                   <td className="px-5 py-3">
                     {i + 1}

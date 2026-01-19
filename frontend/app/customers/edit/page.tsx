@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { useForm } from "react-hook-form";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -19,7 +19,7 @@ type FormValues = {
   aadhar_file?: FileList;
 };
 
-export default function EditCustomerPage() {
+function EditCustomerForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const customerId = searchParams.get("id");
@@ -219,5 +219,13 @@ export default function EditCustomerPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function EditCustomerPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading...</div>}>
+      <EditCustomerForm />
+    </Suspense>
   );
 }

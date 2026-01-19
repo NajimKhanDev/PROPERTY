@@ -1,11 +1,11 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import axiosInstance from "@/app/api/axiosInstance";
 import ProjectApi from "@/app/api/ProjectApis";
 
-export default function ViewUserPage() {
+function ViewUserContent() {
   const id = useSearchParams().get("id");
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
@@ -78,6 +78,14 @@ export default function ViewUserPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ViewUserPage() {
+  return (
+    <Suspense fallback={<p className="p-6">Loading...</p>}>
+      <ViewUserContent />
+    </Suspense>
   );
 }
 

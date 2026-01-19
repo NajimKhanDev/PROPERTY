@@ -1,12 +1,12 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import axiosInstance from "@/app/api/axiosInstance";
 import ProjectApi from "@/app/api/ProjectApis";
 import toast from "react-hot-toast";
 
-export default function EditUserPage() {
+function EditUserForm() {
   const id = useSearchParams().get("id");
   const router = useRouter();
 
@@ -172,5 +172,13 @@ export default function EditUserPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function EditUserPage() {
+  return (
+    <Suspense fallback={<p className="p-6">Loading...</p>}>
+      <EditUserForm />
+    </Suspense>
   );
 }

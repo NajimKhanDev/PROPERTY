@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import axiosInstance from "@/app/api/axiosInstance";
 import ProjectApi from "@/app/api/ProjectApis";
 import toast from "react-hot-toast";
 
-export default function PropertyViewPage() {
+function PropertyViewContent() {
   const searchParams = useSearchParams();
   const propertyId = searchParams.get("id");
 
@@ -912,6 +912,14 @@ export default function PropertyViewPage() {
 
 
     </div>
+  );
+}
+
+export default function PropertyViewPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-center text-gray-500">Loading property details...</div>}>
+      <PropertyViewContent />
+    </Suspense>
   );
 }
 
